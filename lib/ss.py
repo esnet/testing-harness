@@ -12,7 +12,7 @@ from lib.ampq import AMPQSender
 
 log = logging.getLogger("harness")
 
-SS_PATH = "/usr/sbin/ss"
+SS_PATH = "/usr/local/sbin/ss"
 IP_MODE = socket.AF_INET
 SS_INTERVAL_SECONDS = 0.5  # gather 'ss' stats each X seconds
 
