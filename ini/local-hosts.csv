@@ -1,0 +1,2 @@
+hostname,rtt,NIC_speed
+127.0.0.1,0.1ms,10Gbps
