@@ -71,6 +71,7 @@ class Job:
         self.iter_uuids = list()
         self.param_sweep = cfg.get('param-sweep', None)
         self.loss = cfg.get('netem-loss', None)
+        self.lat = cfg.get('netem-lat', None)
         self.limit = cfg.get('netem-limit', None)
         self.pacing = cfg.get('pacing', None)
         self.lat_sweep = cfg.get('lat-sweep', None)
@@ -172,12 +173,14 @@ class Job:
         if self.param_sweep :
            md["param_name"] = self.param_name
            md["param_val_list"] = self.param_val_list
+        if self.loss :
+           md["netem_loss"] = self.loss
+        if self.lat :
+           md["netem_lat"] = self.lat
         if self.lat_sweep :
            md["lat_val_list"] = self.lat_val_list
-           md["netem_loss"] = self.loss
         if self.limit_sweep :
            md["limit_val_list"] = self.limit_val_list
-           md["netem_loss"] = self.loss
         if self.nic :
            md["NIC"] = self.nic
            cmd = f'ifconfig {self.nic} | grep -i MTU '
@@ -354,9 +357,7 @@ class Job:
                             ofname_suffix = f"{dst}:{iter}:{limit}pkts"
                             ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{limit}pkts")
                             # FIXME: path should not be hard coded... XXX
-                            # XXX: For now, assume 5ms for latency
-                            lat = "5ms"
-                            pcmd = f"/harness/utils/pre-netem.sh %s %s %s > {ofname}  2>&1 &" % (lat, self.loss, limit)
+                            pcmd = f"/harness/utils/pre-netem.sh %s %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, limit)
                             log.info (f"Running command to set netem latency: %s" % pcmd)
                             try:
                                 status = os.system(pcmd)
@@ -366,11 +367,11 @@ class Job:
                             time.sleep(5)
 
                             if self.param_sweep :  # if both limit_sweep and param_sweep
-                                self.param_sweep_loop (dst, cmd, iter, archive, lat, limit)
+                                self.param_sweep_loop (dst, cmd, iter, archive, self.lat, limit)
                             else :
                                 self.subrun(dst, cmd, iter, ofname_suffix, archive)
                     elif self.param_sweep :  # if param_sweep only
-                        self.param_sweep_loop (dst, cmd, iter, archive, 0, limit)
+                        self.param_sweep_loop (dst, cmd, iter, archive, self.lat, limit)
                     else:
                         ofname_suffix = f"{dst}:{iter}"
                         self.subrun(dst, cmd, iter, ofname_suffix, archive)
