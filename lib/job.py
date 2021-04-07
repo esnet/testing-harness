@@ -370,6 +370,20 @@ class Job:
                                 self.param_sweep_loop (dst, cmd, iter, archive, self.lat, limit)
                             else :
                                 self.subrun(dst, cmd, iter, ofname_suffix, archive)
+                    elif self.lat :  # single netem lat only 
+                        rtt=f"%s" % (float(self.lat) * 2)
+                        ofname_suffix = f"{dst}:{iter}:{rtt}ms"
+                        ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{rtt}ms")
+                        # FIXME: path should not be hard coded... XXX
+                        pcmd = f"/harness/utils/pre-netem.sh %sms %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, self.limit)
+                        log.info (f"Running command to set netem latency: %s" % pcmd)
+                        try:
+                            status = os.system(pcmd)
+                        except:
+                            log.info ("Error setting netem, Exitting ")
+                            sys.exit(-1)
+                        time.sleep(5)
+                        self.subrun(dst, cmd, iter, ofname_suffix, archive)
                     elif self.param_sweep :  # if param_sweep only
                         self.param_sweep_loop (dst, cmd, iter, archive, self.lat, limit)
                     else:
