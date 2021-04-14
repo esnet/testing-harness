@@ -186,23 +186,24 @@ class Job:
            if not self.nic :
                log.error("Error: must specify NIC if using pacing option")
                sys.exit(-1)
-           ofname = os.path.join(self.outdir, f"pre-netem.out")
+           ofname = os.path.join(self.outdir, f"pacing.out")
            cmd = f"/harness/utils/set-pacing.sh %s %s  > {ofname}  2>&1 &" % (self.nic, self.pacing)
            log.debug(f"calling {cmd}")
            try:
                p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
            except subprocess.CalledProcessError as err:
                print('ERROR setting pacing :', err)
+           log.debug(f"pacing set")
         else:  
            if self.nic : # clear any pacing setting if nic is set but pacing is not set
-               ofname = os.path.join(self.outdir, f"pre-netem.out")
+               ofname = os.path.join(self.outdir, f"pacing.out")
                cmd = f"/harness/utils/set-pacing.sh %s > {ofname}  2>&1 &" % (self.nic)
                log.debug(f"calling {cmd}")
                try:
                    p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
                except subprocess.CalledProcessError as err:
                    print('ERROR clearing pacing:', err)
-        sys.exit(1)
+               log.debug(f"pacing cleared")
         if self.nic :
            md["NIC"] = self.nic
            cmd = f'ifconfig {self.nic} | grep -i MTU '
