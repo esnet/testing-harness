@@ -181,6 +181,28 @@ class Job:
            md["lat_val_list"] = self.lat_val_list
         if self.limit_sweep :
            md["limit_val_list"] = self.limit_val_list
+        if self.pacing :
+           md["pacing"] = self.pacing
+           if not self.nic :
+               log.error("Error: must specify NIC if using pacing option")
+               sys.exit(-1)
+           ofname = os.path.join(self.outdir, f"pre-netem.out")
+           cmd = f"/harness/utils/set-pacing.sh %s %s  > {ofname}  2>&1 &" % (self.nic, self.pacing)
+           log.debug(f"calling {cmd}")
+           try:
+               p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
+           except subprocess.CalledProcessError as err:
+               print('ERROR setting pacing :', err)
+        else:  
+           if self.nic : # clear any pacing setting if nic is set but pacing is not set
+               ofname = os.path.join(self.outdir, f"pre-netem.out")
+               cmd = f"/harness/utils/set-pacing.sh %s > {ofname}  2>&1 &" % (self.nic)
+               log.debug(f"calling {cmd}")
+               try:
+                   p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
+               except subprocess.CalledProcessError as err:
+                   print('ERROR clearing pacing:', err)
+        sys.exit(1)
         if self.nic :
            md["NIC"] = self.nic
            cmd = f'ifconfig {self.nic} | grep -i MTU '
@@ -354,8 +376,8 @@ class Job:
                                 self.subrun(dst, cmd, iter, ofname_suffix, archive)
                     elif self.limit_sweep :  
                         for limit in self.limit_val_list :
-                            ofname_suffix = f"{dst}:{iter}:{limit}pkts"
-                            ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{limit}pkts")
+                            ofname_suffix = f"{dst}:{iter}:{limit}"
+                            ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{limit}")
                             # FIXME: path should not be hard coded... XXX
                             pcmd = f"/harness/utils/pre-netem.sh %s %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, limit)
                             log.info (f"Running command to set netem latency: %s" % pcmd)
@@ -418,7 +440,7 @@ class Job:
                       rtt=f"%s" % (float(lat) * 2)
                       ofname_suffix = f"{dst}:{iter}:{param}:{val}:{rtt}ms"
                 elif self.limit_sweep:
-                      ofname_suffix = f"{dst}:{iter}:{param}:{val}:{limit}pkts"
+                      ofname_suffix = f"{dst}:{iter}:{param}:{val}:{limit}"
                 else :
                       ofname_suffix = f"{dst}:{iter}:{param}:{val}"
                 log.info (f"output files will have suffix: %s" % ofname_suffix)
