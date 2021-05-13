@@ -181,6 +181,29 @@ class Job:
            md["lat_val_list"] = self.lat_val_list
         if self.limit_sweep :
            md["limit_val_list"] = self.limit_val_list
+        if self.pacing :
+           md["pacing"] = self.pacing
+           if not self.nic :
+               log.error("Error: must specify NIC if using pacing option")
+               sys.exit(-1)
+           of = os.path.join(self.outdir, "pacing.out")
+           cmd = f"/harness/utils/set-pacing.sh %s %s  > {of}  2>&1 &" % (self.nic, self.pacing)
+           log.debug(f"calling {cmd}")
+           try:
+               p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
+           except subprocess.CalledProcessError as err:
+               print('ERROR setting pacing :', err)
+           log.debug(f"pacing set")
+        else:  
+           if self.nic : # clear any pacing setting if nic is set but pacing is not set
+               of = os.path.join(self.outdir, "pacing.out")
+               cmd = f"/harness/utils/set-pacing.sh %s > {of}  2>&1 &" % (self.nic)
+               log.debug(f"calling {cmd}")
+               try:
+                   p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
+               except subprocess.CalledProcessError as err:
+                   print('ERROR clearing pacing:', err)
+               log.debug(f"pacing cleared")
         if self.nic :
            md["NIC"] = self.nic
            cmd = f'ifconfig {self.nic} | grep -i MTU '
@@ -316,7 +339,9 @@ class Job:
     def run(self, archive=None):
         log.info(f"Executing runs for job {self.name} and {self.iters} iterations")
 
-        self._export_md(archive, ofname=f"{self.outdir}/jobmeta.json")
+        ofname=f"{self.outdir}/jobmeta.json"
+        self._export_md(archive, ofname)
+        log.debug(f"saved jobmeta info to file {ofname}")
 
         if len(self._hosts) == 0:
             self._hosts.append(self.dst)
@@ -349,13 +374,13 @@ class Job:
                             time.sleep(5)
 
                             if self.param_sweep :  # if both lat_sweep and param_sweep
-                                self.param_sweep_loop (dst, cmd, iter, archive, lat, limit)
+                                self.param_sweep_loop (dst, cmd, iter, archive, lat, self.limit)
                             else :
                                 self.subrun(dst, cmd, iter, ofname_suffix, archive)
                     elif self.limit_sweep :  
                         for limit in self.limit_val_list :
-                            ofname_suffix = f"{dst}:{iter}:{limit}pkts"
-                            ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{limit}pkts")
+                            ofname_suffix = f"{dst}:{iter}:{limit}"
+                            ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{limit}")
                             # FIXME: path should not be hard coded... XXX
                             pcmd = f"/harness/utils/pre-netem.sh %s %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, limit)
                             log.info (f"Running command to set netem latency: %s" % pcmd)
@@ -370,6 +395,20 @@ class Job:
                                 self.param_sweep_loop (dst, cmd, iter, archive, self.lat, limit)
                             else :
                                 self.subrun(dst, cmd, iter, ofname_suffix, archive)
+                    elif self.lat :  # single netem lat only 
+                        rtt=f"%s" % (float(self.lat) * 2)
+                        ofname_suffix = f"{dst}:{iter}:{rtt}ms"
+                        ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{rtt}ms")
+                        # FIXME: path should not be hard coded... XXX
+                        pcmd = f"/harness/utils/pre-netem.sh %sms %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, self.limit)
+                        log.info (f"Running command to set netem latency: %s" % pcmd)
+                        try:
+                            status = os.system(pcmd)
+                        except:
+                            log.info ("Error setting netem, Exitting ")
+                            sys.exit(-1)
+                        time.sleep(5)
+                        self.subrun(dst, cmd, iter, ofname_suffix, archive)
                     elif self.param_sweep :  # if param_sweep only
                         self.param_sweep_loop (dst, cmd, iter, archive, self.lat, limit)
                     else:
@@ -404,7 +443,7 @@ class Job:
                       rtt=f"%s" % (float(lat) * 2)
                       ofname_suffix = f"{dst}:{iter}:{param}:{val}:{rtt}ms"
                 elif self.limit_sweep:
-                      ofname_suffix = f"{dst}:{iter}:{param}:{val}:{limit}pkts"
+                      ofname_suffix = f"{dst}:{iter}:{param}:{val}:{limit}"
                 else :
                       ofname_suffix = f"{dst}:{iter}:{param}:{val}"
                 log.info (f"output files will have suffix: %s" % ofname_suffix)
