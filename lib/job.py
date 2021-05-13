@@ -186,8 +186,8 @@ class Job:
            if not self.nic :
                log.error("Error: must specify NIC if using pacing option")
                sys.exit(-1)
-           ofname = os.path.join(self.outdir, f"pacing.out")
-           cmd = f"/harness/utils/set-pacing.sh %s %s  > {ofname}  2>&1 &" % (self.nic, self.pacing)
+           of = os.path.join(self.outdir, "pacing.out")
+           cmd = f"/harness/utils/set-pacing.sh %s %s  > {of}  2>&1 &" % (self.nic, self.pacing)
            log.debug(f"calling {cmd}")
            try:
                p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
@@ -196,8 +196,8 @@ class Job:
            log.debug(f"pacing set")
         else:  
            if self.nic : # clear any pacing setting if nic is set but pacing is not set
-               ofname = os.path.join(self.outdir, f"pacing.out")
-               cmd = f"/harness/utils/set-pacing.sh %s > {ofname}  2>&1 &" % (self.nic)
+               of = os.path.join(self.outdir, "pacing.out")
+               cmd = f"/harness/utils/set-pacing.sh %s > {of}  2>&1 &" % (self.nic)
                log.debug(f"calling {cmd}")
                try:
                    p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
@@ -339,7 +339,9 @@ class Job:
     def run(self, archive=None):
         log.info(f"Executing runs for job {self.name} and {self.iters} iterations")
 
-        self._export_md(archive, ofname=f"{self.outdir}/jobmeta.json")
+        ofname=f"{self.outdir}/jobmeta.json"
+        self._export_md(archive, ofname)
+        log.debug(f"saved jobmeta info to file {ofname}")
 
         if len(self._hosts) == 0:
             self._hosts.append(self.dst)
@@ -372,7 +374,7 @@ class Job:
                             time.sleep(5)
 
                             if self.param_sweep :  # if both lat_sweep and param_sweep
-                                self.param_sweep_loop (dst, cmd, iter, archive, lat, limit)
+                                self.param_sweep_loop (dst, cmd, iter, archive, lat, self.limit)
                             else :
                                 self.subrun(dst, cmd, iter, ofname_suffix, archive)
                     elif self.limit_sweep :  
