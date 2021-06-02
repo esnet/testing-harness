@@ -22,4 +22,4 @@ class iperf3(Job):
                 ampq.send("iperf3", json.dumps(jobj))
                 f.close()
             except Exception as e:
-                log.error("Could not generate iperf3 output for ampq send: {e}")
+                log.error(f"Could not generate iperf3 output for ampq send: {e}")
