@@ -72,7 +72,9 @@ class TestingDaemon:
             try:
                 typ = parser[s]['type'].lower()
                 jclass = JOB_TYPE_MAP.get(typ, Job)
-                job = jclass(s, parser[s], self.outdir, self.hostlist, self.nic)
+                job = jclass(s, parser[s], self.outdir,
+                             self.hostlist, self.nic,
+                             self.archive)
                 self.jobs.append(job)
             except Exception as e:
                 log.error(f"Could not create job from config \"{s}\": {e}")
@@ -86,7 +88,7 @@ class TestingDaemon:
         log.info("Starting jobs [{}]".format(len(self.jobs)))
         for job in self.jobs:
             if job.enabled:
-                job.run(self.archive)
+                job.run()
             else:
                 log.info(f"Skipping disabled job \"{job.name}\"")
 

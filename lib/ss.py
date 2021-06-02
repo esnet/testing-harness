@@ -30,7 +30,7 @@ def ss_send_ampq(infile, archive=None, parent_job=None):
     try:
         f = open(infile, 'r')
     except:
-        log.debug(f"ERROR: ss json file {infile} not found")
+        log.error(f"ss json file {infile} not found")
         return
     if not archive:
         log.debug("ss archive not enabled")

@@ -43,7 +43,7 @@ def skip_comments(lines):
 
 
 class Job:
-    def __init__(self, name, cfg, outdir, hostlist, nic):
+    def __init__(self, name, cfg, outdir, hostlist, nic, archive):
         self.uuid = str(uuid.uuid4())
         self.name = name
         self.conf = cfg
@@ -77,7 +77,13 @@ class Job:
         self.lat_sweep = cfg.get('lat-sweep', None)
         self.limit_sweep = cfg.get('limit-sweep', None)
         self.nic = nic
+        self.archive = archive
         self.vector_element = 0
+
+        # determine where our util/script files are located
+        abspath = os.path.dirname(os.path.abspath(__file__))
+        self.util_path = os.path.join(abspath, "..", "utils")
+
         if self.lat_sweep and self.limit_sweep :
             log.error ("Error: Can not specify both lat-sweeep and limit-sweep in the same test ")
             sys.exit(-1)
@@ -161,9 +167,11 @@ class Job:
         else:
             log.info(f"item \"{name}\" not enabled")
 
+    def _src_cmd_cb(self, host, cmd, ofname, uuid):
+        pass
 
-    def _export_md(self, archive=None, ofname=None):
-        if not archive and not ofname:
+    def _export_md(self, ofname=None):
+        if not self.archive and not ofname:
             return
 
         # get dictionary representation of this job configuration object
@@ -187,7 +195,7 @@ class Job:
                log.error("Error: must specify NIC if using pacing option")
                sys.exit(-1)
            of = os.path.join(self.outdir, "pacing.out")
-           cmd = f"/harness/utils/set-pacing.sh %s %s  > {of}  2>&1 &" % (self.nic, self.pacing)
+           cmd = f"{self.util_path}/set-pacing.sh %s %s  > {of}  2>&1 &" % (self.nic, self.pacing)
            log.debug(f"calling {cmd}")
            try:
                p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
@@ -197,7 +205,7 @@ class Job:
         else:  
            if self.nic : # clear any pacing setting if nic is set but pacing is not set
                of = os.path.join(self.outdir, "pacing.out")
-               cmd = f"/harness/utils/set-pacing.sh %s > {of}  2>&1 &" % (self.nic)
+               cmd = f"{self.util_path}/set-pacing.sh %s > {of}  2>&1 &" % (self.nic)
                log.debug(f"calling {cmd}")
                try:
                    p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
@@ -230,8 +238,8 @@ class Job:
            md["NIC_speed"] = nic_speed
         jstr = json.dumps(md)
 
-        if archive:
-            ampq = AMPQSender(archive, "jobmeta")
+        if self.archive:
+            ampq = AMPQSender(self.archive, "jobmeta")
             ampq.send("jobmeta", jstr)
 
         if ofname:
@@ -264,14 +272,14 @@ class Job:
                       }
             self.td_thread = launch_tcpdump(params, lambda: self.stop_instr)
 
-    def _stop_instr(self, dst, iter, ofname_suffix, archive=None):
+    def _stop_instr(self, dst, iter, ofname_suffix):
         self.stop_instr = True
         if self.ss:
             self.ss_thread.join()
             # convert results to JSON, use UUID of job metadata to link
             #  FIXME: needs future uuid mapping per iteration
             #  FIXME: dont hardcode path to ss_log_parser.py
-            cmd = f"uuid={self.iter_uuids[iter-1]} infile=ss:{ofname_suffix} dir={self.outdir} /harness/utils/ss_log_parser.py"
+            cmd = f"uuid={self.iter_uuids[iter-1]} infile=ss:{ofname_suffix} dir={self.outdir} {self.util_path}/ss_log_parser.py"
             # for summary only, add summary_only=true
             log.debug(f"converting ss results to JSON: {cmd}")
             try:
@@ -280,14 +288,14 @@ class Job:
                 log.info(f"Error running {cmd}: {e}")
                 return
             ss_json = f"{self.outdir}/ss:{ofname_suffix}.json"
-            log.debug(f"send ss results from file {ss_json} to archive {archive}")
-            ss_send_ampq(ss_json, archive, self.iter_uuids[iter-1])
+            log.debug(f"send ss results from file {ss_json} to archive {self.archive}")
+            ss_send_ampq(ss_json, self.archive, self.iter_uuids[iter-1])
         if self.tcpdump:
             self.td_thread.join()
             if self.tcptrace:
                 ofname = f"tcpdump:{ofname_suffix}"
                 try:
-                    launch_tcptrace(ofname, self.outdir, dst, archive, self.iter_uuids[iter-1])
+                    launch_tcptrace(ofname, self.outdir, dst, self.archive, self.iter_uuids[iter-1])
                 except Exception as e:
                     log.error(f"Failed to collect tcptrace stats for {dst}: {e}")
 
@@ -327,20 +335,19 @@ class Job:
             return
         try:
             f = open(ofname, 'wb')
-            if outs:
-                f.write(outs)
-            else:
-                f.write(proc.stdout.read())
+            if not outs:
+                outs = proc.stdout.read()
+            f.write(outs)
             f.close()
         except Exception as e:
             log.error(f"Could not write output for \"{ofname}\": {e}")
             return
 
-    def run(self, archive=None):
+    def run(self):
         log.info(f"Executing runs for job {self.name} and {self.iters} iterations")
 
         ofname=f"{self.outdir}/jobmeta.json"
-        self._export_md(archive, ofname)
+        self._export_md(ofname)
         log.debug(f"saved jobmeta info to file {ofname}")
 
         if len(self._hosts) == 0:
@@ -362,8 +369,7 @@ class Job:
                             rtt=f"%s" % (float(lat) * 2)
                             ofname_suffix = f"{dst}:{iter}:{rtt}ms"
                             ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{rtt}ms")
-                            # FIXME: path should not be hard coded... XXX
-                            pcmd = f"/harness/utils/pre-netem.sh %sms %s %s > {ofname}  2>&1 &" % (lat, self.loss, self.limit)
+                            pcmd = f"{self.util_path}/pre-netem.sh %sms %s %s > {ofname}  2>&1 &" % (lat, self.loss, self.limit)
                             log.info (f"Running command to set netem latency: %s" % pcmd)
                             try:
                                 status = os.system(pcmd)
@@ -374,15 +380,14 @@ class Job:
                             time.sleep(5)
 
                             if self.param_sweep :  # if both lat_sweep and param_sweep
-                                self.param_sweep_loop (dst, cmd, iter, archive, lat, self.limit)
+                                self.param_sweep_loop (dst, cmd, iter, lat, self.limit)
                             else :
-                                self.subrun(dst, cmd, iter, ofname_suffix, archive)
+                                self.subrun(dst, cmd, iter, ofname_suffix)
                     elif self.limit_sweep :  
                         for limit in self.limit_val_list :
                             ofname_suffix = f"{dst}:{iter}:{limit}"
                             ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{limit}")
-                            # FIXME: path should not be hard coded... XXX
-                            pcmd = f"/harness/utils/pre-netem.sh %s %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, limit)
+                            pcmd = f"{self.util_path}/pre-netem.sh %s %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, limit)
                             log.info (f"Running command to set netem latency: %s" % pcmd)
                             try:
                                 status = os.system(pcmd)
@@ -392,15 +397,14 @@ class Job:
                             time.sleep(5)
 
                             if self.param_sweep :  # if both limit_sweep and param_sweep
-                                self.param_sweep_loop (dst, cmd, iter, archive, self.lat, limit)
+                                self.param_sweep_loop (dst, cmd, iter, self.lat, limit)
                             else :
-                                self.subrun(dst, cmd, iter, ofname_suffix, archive)
+                                self.subrun(dst, cmd, iter, ofname_suffix)
                     elif self.lat :  # single netem lat only 
                         rtt=f"%s" % (float(self.lat) * 2)
                         ofname_suffix = f"{dst}:{iter}:{rtt}ms"
                         ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{rtt}ms")
-                        # FIXME: path should not be hard coded... XXX
-                        pcmd = f"/harness/utils/pre-netem.sh %sms %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, self.limit)
+                        pcmd = f"{self.util_path}pre-netem.sh %sms %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, self.limit)
                         log.info (f"Running command to set netem latency: %s" % pcmd)
                         try:
                             status = os.system(pcmd)
@@ -408,17 +412,17 @@ class Job:
                             log.info ("Error setting netem, Exitting ")
                             sys.exit(-1)
                         time.sleep(5)
-                        self.subrun(dst, cmd, iter, ofname_suffix, archive)
+                        self.subrun(dst, cmd, iter, ofname_suffix)
                     elif self.param_sweep :  # if param_sweep only
-                        self.param_sweep_loop (dst, cmd, iter, archive, self.lat, limit)
+                        self.param_sweep_loop (dst, cmd, iter, self.lat, limit)
                     else:
                         ofname_suffix = f"{dst}:{iter}"
-                        self.subrun(dst, cmd, iter, ofname_suffix, archive)
+                        self.subrun(dst, cmd, iter, ofname_suffix)
 
             else:
                 log.info(f"Error: ping to {dst} failed, error code: \"{status}\"")
 
-    def param_sweep_loop (self, dst, cmd, iter, archive, lat, limit):
+    def param_sweep_loop (self, dst, cmd, iter, lat, limit):
 
          for val in self.param_val_list :
                 if self.vector_element > 0 : # special handling if param is a vector
@@ -447,10 +451,10 @@ class Job:
                 else :
                       ofname_suffix = f"{dst}:{iter}:{param}:{val}"
                 log.info (f"output files will have suffix: %s" % ofname_suffix)
-                self.subrun(dst, cmd, iter, ofname_suffix, archive)
+                self.subrun(dst, cmd, iter, ofname_suffix)
 
 
-    def subrun(self, dst, cmd, iter, ofname_suffix, archive):
+    def subrun(self, dst, cmd, iter, ofname_suffix):
 
         # Start instrumentation (per iter)
         if self.instrument:
@@ -458,7 +462,6 @@ class Job:
 
         stop_threads = False
         jthreads = list()
-
 
         # handle pre-cmd invocation
         if self.pre_src_cmd:
@@ -493,19 +496,23 @@ class Job:
         if self.src_cmd:
            done = False
            cnt = 0
-           while (not done): # try up to 4 times for sucessful run
+           while not done: # try up to 4 times for sucessful run
               log.debug ("Starting test...")
               ofname = os.path.join(self.outdir, f"src-cmd:{ofname_suffix}")
               th = Thread(target=self._run_host_cmd,
                                 args=(self.src, cmd, ofname, None))
               th.start()
               th.join()
-              log.debug ("size of results file %s is %d" % (ofname, os.path.getsize(ofname)))
+              log.debug("size of results file %s is %d" % (ofname, os.path.getsize(ofname)))
               if os.path.getsize(ofname) > 1000 or cnt > 4:
                  done = True
               else:
                  log.info ("Test failed, trying again...")
-                 cnt+=1
+                 cnt += 1
+
+        # invoke a callback with some context
+        if self.src_cmd:
+            self._src_cmd_cb(self.src, cmd, ofname, self.iter_uuids[iter-1])
 
         # wait for a bit
         time.sleep(2)
@@ -530,4 +537,4 @@ class Job:
 
         # Stop instrumentation (per iter)
         if self.instrument:
-            self._stop_instr(dst, iter, ofname_suffix, archive)
+            self._stop_instr(dst, iter, ofname_suffix)
