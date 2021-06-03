@@ -12,7 +12,7 @@ class iperf3(Job):
         super().run()
 
     def _src_cmd_cb(self, host, cmd, ofname, uuid):
-        if "iperf" in cmd:
+        if "iperf" in cmd and self.archive:
             try:
                 f = open(ofname, "r")
                 outs = f.read()

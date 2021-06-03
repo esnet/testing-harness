@@ -13,7 +13,8 @@ class AMPQSender(object):
             self._conn = pika.BlockingConnection(
                 pika.ConnectionParameters(host=url))
         except Exception as e:
-            log.error(f"Could not connect to {self._url}: {e}")
+            log.error(f"AMPQSender could not connect to {self._url}: {e}")
+            self._channel = None
             return
 
         self._channel = self._conn.channel()
@@ -23,6 +24,8 @@ class AMPQSender(object):
         self._persist = persistent
 
     def send(self, key, jstr):
+        if not self._channel:
+            return
         try:
             log.debug(f"Sending data ({len(jstr)} items) to archive {self._url}\n")
             try:
