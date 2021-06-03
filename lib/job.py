@@ -414,7 +414,7 @@ class Job:
                         time.sleep(5)
                         self.subrun(dst, cmd, iter, ofname_suffix)
                     elif self.param_sweep :  # if param_sweep only
-                        self.param_sweep_loop (dst, cmd, iter, self.lat, limit)
+                        self.param_sweep_loop (dst, cmd, iter, self.lat, self.limit)
                     else:
                         ofname_suffix = f"{dst}:{iter}"
                         self.subrun(dst, cmd, iter, ofname_suffix)
