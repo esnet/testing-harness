@@ -19,7 +19,7 @@ RUN cd sysstat && ./configure --prefix=/usr/local && make -j4 && make install
 
 # Get iperf3 version that does different congestion control on even/odd numbered streams
 RUN git clone -b bbr2-testing https://github.com/esnet/iperf.git
-RUN cd iperf && ./configure && make -j4
+RUN cd iperf && ./configure --enable-static --disable-shared && make -j4
 
 # Now build final perfSONAR extended image
 FROM perfsonar/testpoint:latest
