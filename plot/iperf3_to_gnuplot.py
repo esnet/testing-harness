@@ -128,14 +128,6 @@ def main():
             fh_even = open(os.path.join(os.curdir,fname), 'w')
             fname = os.path.splitext(options.output)[0]+".odd.sum.dat"
             fh_odd = open(os.path.join(os.curdir,fname), 'w')
-            fname = os.path.splitext(options.output)[0]+".0.dat"
-            fh_s0 = open(os.path.join(os.curdir,fname), 'w')
-            fname = os.path.splitext(options.output)[0]+".1.dat"
-            fh_s1 = open(os.path.join(os.curdir,fname), 'w')
-            fname = os.path.splitext(options.output)[0]+".2.dat"
-            fh_s2 = open(os.path.join(os.curdir,fname), 'w')
-            fname = os.path.splitext(options.output)[0]+".3.dat"
-            fh_s3 = open(os.path.join(os.curdir,fname), 'w')
     else:
         fh = sys.stdout
 
@@ -144,13 +136,9 @@ def main():
     else:
         fmt = generate_output
 
-    # FIXME: hack for 4 streams, should eventually generalize to N streams
     evn = {}
     odd = {}
-    stream0 = {}
-    stream1 = {}
-    stream2 = {}
-    stream3 = {}
+    stream = {}
 
     for i in fmt(iperf, options):
         #print ("i = %s" % i)
@@ -162,19 +150,19 @@ def main():
             retrans = int(i.split()[3])
             stream_id = int(i.split()[5])
             #print ("stream: %s, time: %s, bytes: %s, bps:%s, retrans:%s" % (stream_id, time, bytes, bps, retrans))
+            if stream_id not in stream:
+                stream[stream_id] = {}
+            stream[stream_id][time] = [bytes, bps, retrans]
             if stream_id == 0:
                   evn[time] = [bytes, bps, retrans]
-                  stream0[time] = [bytes, bps, retrans]
-            if stream_id == 1:
+            elif stream_id == 1:
                   odd[time] = [bytes, bps, retrans]
-                  stream1[time] = [bytes, bps, retrans]
-            if stream_id == 2:
-                  stream2[time] = [bytes, bps, retrans]
+            elif stream_id % 2 == 0:  # even ID > 0
                   evn[time][0] += bytes
                   evn[time][1] += bps
                   evn[time][2] += retrans
-            if stream_id == 3:
-                  stream3[time] = [bytes, bps, retrans]
+                  #print ("stream: %s, time: %s, bytes: %s, bps:%s, retrans:%s" % (stream_id, time, evn[time][0], evn[time][1], evn[time][2] ) )
+            else: #  odd ID > 1
                   odd[time][0] += bytes
                   odd[time][1] += bps
                   odd[time][2] += retrans
@@ -189,18 +177,16 @@ def main():
               fh_odd.write(s)
 
          # write dict contents of per stream files
-         for key, value in stream0.items():
-              s = f"%1f %d %.3f %d \n" % (key, value[0], value[1], value[2])
-              fh_s0.write(s)
-         for key, value in stream1.items():
-              s = f"%1f %d %.3f %d \n" % (key, value[0], value[1], value[2])
-              fh_s1.write(s)
-         for key, value in stream2.items():
-              s = f"%1f %d %.3f %d \n" % (key, value[0], value[1], value[2])
-              fh_s2.write(s)
-         for key, value in stream3.items():
-              s = f"%1f %d %.3f %d \n" % (key, value[0], value[1], value[2])
-              fh_s3.write(s)
+         for sid in range (stream_id):
+            ss = f"%d" % sid # convert to string
+            fname = os.path.splitext(options.output)[0]+"."+ss+".dat"
+            fhs = open(os.path.join(os.curdir,fname), 'w')
+            #print ("writing results for stream %d to file %s" % (sid, fname))
+            for time in stream[sid]:
+                value = stream[sid][time]
+                #print ("stream %d, time %.2f:  values: %d, %.3f, %d " % (sid, time, value[0], value[1], value[2]) )
+                s = f"%1f %d %.3f %d \n" % (time, value[0], value[1], value[2])
+                fhs.write(s)
 
 
 if __name__ == '__main__':
