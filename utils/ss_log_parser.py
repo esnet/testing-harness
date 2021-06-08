@@ -66,7 +66,7 @@ def read_file():
     time_secs = -1
     infile =  os.environ['infile']
     ss_log_path = f"%s/%s" % (outdir,infile)
-    print('reading path: %s' % (ss_log_path))
+    #print('reading path: %s' % (ss_log_path))
     try:
         f = open(ss_log_path)
     except:
@@ -271,12 +271,20 @@ def compute_summary_info (f, all_data):
             s['data_segs'] = last_data_segs_out[port1]
             s['rtrans_rate'] =  f"{retrans:.8f}"  # to make sure not in scientific notation
             streams.append(s)
-            print('stream %d: data seg = %d ;  retrans rate = %.8f (%s)' % (i,last_data_segs_out[port1],retrans,cc[port1]) )
+            #print('stream %d: data seg = %d ;  retrans rate = %.8f (%s)' % (i,last_data_segs_out[port1],retrans,cc[port1]) )
         else:
             num_streams -= 1   # dont count control stream
         
         total_retrans += last_retrans[port1]
         total_data_segs_out += last_data_segs_out[port1]
+        if cc[port1] == "bbr2":
+             bbr2_retrans += last_retrans[port1]
+             bbr2_data_segs += last_data_segs_out[port1]
+        else:  # XXX: Assumes cubic if not bbr
+             cubic_retrans += last_retrans[port1]
+             cubic_data_segs += last_data_segs_out[port1]
+        #print('bbr2_data_segs: %d, cubic_data_segs: %d' % (bbr2_data_segs, cubic_data_segs) )
+
         i += 1
 
     if total_data_segs_out == 0:
@@ -292,7 +300,10 @@ def compute_summary_info (f, all_data):
     stream_info['total_retrans'] = total_retrans
     stream_info['total_data_segs_out'] = total_data_segs_out
     total_retrans_rate = f"{total_retrans_rate:.8f}"  # to make sure not in scientific notation
-    stream_info['total_retrans_rate'] = total_retrans_rate
+    stream_info['cubic_data_segs'] = cubic_data_segs
+    stream_info['cubic_retrans_rate'] = cubic_retrans
+    stream_info['bbr2_data_segs'] = bbr2_data_segs
+    stream_info['bbr2_retrans_rate'] = bbr2_retrans
 
     # also compute median srtt for all srtt samples we took from periodic ss dumps.
     rtts = []
@@ -315,7 +326,7 @@ def log_retrans_rate(f, summary):
     # dump summary object
     json.dump(summary, f)
     f.write("\n")
-    print (json.dumps(summary))
+    #print (json.dumps(summary))
     ss = summary.get('streams')
     for j in range(len(ss)):
         # also dump per stream objects
@@ -324,7 +335,7 @@ def log_retrans_rate(f, summary):
         s['uuid'] = summary.get('uuid')
         json.dump(s, f)
         f.write("\n")
-        print (json.dumps(s))
+        #print (json.dumps(s))
 
 
 def log_intervals(f, data, uuid):
