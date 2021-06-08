@@ -177,7 +177,7 @@ def main():
               fh_odd.write(s)
 
          # write dict contents of per stream files
-         for sid in range (stream_id):
+         for sid in range (stream_id+1):
             ss = f"%d" % sid # convert to string
             fname = os.path.splitext(options.output)[0]+"."+ss+".dat"
             fhs = open(os.path.join(os.curdir,fname), 'w')
