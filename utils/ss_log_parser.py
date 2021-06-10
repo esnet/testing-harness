@@ -283,7 +283,9 @@ def compute_summary_info (f, all_data):
         else:  # XXX: Assumes cubic if not bbr
              cubic_retrans += last_retrans[port1]
              cubic_data_segs += last_data_segs_out[port1]
+        #print('last_retrans: %d, last_data_segs_out: %d' % (last_retrans[port1], last_data_segs_out[port1]) )
         #print('bbr2_data_segs: %d, cubic_data_segs: %d' % (bbr2_data_segs, cubic_data_segs) )
+        #print('bbr2_retrans: %d, cubic_retrans: %d' % (bbr2_retrans, cubic_retrans) )
 
         i += 1
 
@@ -291,19 +293,24 @@ def compute_summary_info (f, all_data):
         total_retrans_rate = 0
     else:
         total_retrans_rate = round(float(total_retrans) / float(total_data_segs_out),8)
+        cubic_retrans_rate = round(float(cubic_retrans) / float(cubic_data_segs),8)
+        bbr2_retrans_rate = round(float(bbr2_retrans) / float(bbr2_data_segs),8)
 
-    print ('Total data segs: %d ; Total Retransmit rate: %.8f ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, total_time ))
+    print ('Total data segs: %d ; Total Retransmit rate: %.8f ; cubic retrans: %.8f ; bbr2 retrans: %.8f ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time ))
+    total_retrans_rate = f"{total_retrans_rate:.8f}"  # to make sure not in scientific notation
+    cubic_retrans_rate = f"{cubic_retrans_rate:.8f}"  # to make sure not in scientific notation
+    bbr2_retrans_rate = f"{bbr2_retrans_rate:.8f}"  # to make sure not in scientific notation
 
     # add to dict
     stream_info['streams'] = streams
     stream_info['num_streams'] = num_streams
     stream_info['total_retrans'] = total_retrans
     stream_info['total_data_segs_out'] = total_data_segs_out
-    total_retrans_rate = f"{total_retrans_rate:.8f}"  # to make sure not in scientific notation
+    stream_info['cubic_data_segs'] = total_retrans_rate 
     stream_info['cubic_data_segs'] = cubic_data_segs
-    stream_info['cubic_retrans_rate'] = cubic_retrans
+    stream_info['cubic_retrans_rate'] = cubic_retrans_rate
     stream_info['bbr2_data_segs'] = bbr2_data_segs
-    stream_info['bbr2_retrans_rate'] = bbr2_retrans
+    stream_info['bbr2_retrans_rate'] = cubic_retrans_rate
 
     # also compute median srtt for all srtt samples we took from periodic ss dumps.
     rtts = []
