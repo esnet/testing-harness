@@ -113,7 +113,7 @@ def read_file():
         
         h = line.split()[3]
         ip1 = h.split(':')[0]
-        try:
+        try:  # note: only works for IPv4
             port1 = int(h.split(':')[1])
         except:
             print ("port not found, skipping, %s" % {h})
@@ -293,8 +293,14 @@ def compute_summary_info (f, all_data):
         total_retrans_rate = 0
     else:
         total_retrans_rate = round(float(total_retrans) / float(total_data_segs_out),8)
-        cubic_retrans_rate = round(float(cubic_retrans) / float(cubic_data_segs),8)
-        bbr2_retrans_rate = round(float(bbr2_retrans) / float(bbr2_data_segs),8)
+        if cubic_data_segs > 0:
+           cubic_retrans_rate = round(float(cubic_retrans) / float(cubic_data_segs),8)
+        else:
+           cubic_retrans_rate = 0
+        if bbr2_data_segs > 0:
+           bbr2_retrans_rate = round(float(bbr2_retrans) / float(bbr2_data_segs),8)
+        else:
+           bbr2_retrans_rate = 0
 
     print ('Total data segs: %d ; Total Retransmit rate: %.8f ; cubic retrans: %.8f ; bbr2 retrans: %.8f ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time ))
     total_retrans_rate = f"{total_retrans_rate:.8f}"  # to make sure not in scientific notation
