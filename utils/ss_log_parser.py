@@ -302,21 +302,21 @@ def compute_summary_info (f, all_data):
         else:
            bbr2_retrans_rate = 0
 
-    print ('Total data segs: %d ; Total Retransmit rate: %.8f ; cubic retrans: %.8f ; bbr2 retrans: %.8f ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time ))
+    # not needed??
     total_retrans_rate = f"{total_retrans_rate:.8f}"  # to make sure not in scientific notation
     cubic_retrans_rate = f"{cubic_retrans_rate:.8f}"  # to make sure not in scientific notation
     bbr2_retrans_rate = f"{bbr2_retrans_rate:.8f}"  # to make sure not in scientific notation
+    #print ('Total data segs: %d ; Total Retransmit rate: %s ; cubic retrans: %s ; bbr2 retrans: %s ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time ))
 
     # add to dict
     stream_info['streams'] = streams
     stream_info['num_streams'] = num_streams
     stream_info['total_retrans'] = total_retrans
     stream_info['total_data_segs_out'] = total_data_segs_out
-    stream_info['cubic_data_segs'] = total_retrans_rate 
     stream_info['cubic_data_segs'] = cubic_data_segs
     stream_info['cubic_retrans_rate'] = cubic_retrans_rate
     stream_info['bbr2_data_segs'] = bbr2_data_segs
-    stream_info['bbr2_retrans_rate'] = cubic_retrans_rate
+    stream_info['bbr2_retrans_rate'] = bbr2_retrans_rate
 
     # also compute median srtt for all srtt samples we took from periodic ss dumps.
     rtts = []
