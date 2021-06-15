@@ -224,7 +224,7 @@ def compute_summary_info (f, all_data):
     last_retrans =       {}  # last retransmitted packet count per port
     stream_info = {}      # summary info to convert to JSON object
     total_bytes = [0] * 65000  # init to 0 for any possible port #; probably a better way to do this....
-    i = total_retrans = bbr2_retrans = cubic_retrans = cubic_data_segs = bbr2_data_segs = tot_bytes = 0
+    i = total_retrans = bbr2_retrans = cubic_retrans = bbr_retrans = cubic_data_segs = bbr2_data_segs = bbr_data_segs = tot_bytes = 0
     start_time = 0.0
 
     for t in sorted(all_data.keys()):
@@ -280,12 +280,15 @@ def compute_summary_info (f, all_data):
         if cc[port1] == "bbr2":
              bbr2_retrans += last_retrans[port1]
              bbr2_data_segs += last_data_segs_out[port1]
+        elif cc[port1] == "bbr":
+             bbr_retrans += last_retrans[port1]
+             bbr_data_segs += last_data_segs_out[port1]
         else:  # XXX: Assumes cubic if not bbr
              cubic_retrans += last_retrans[port1]
              cubic_data_segs += last_data_segs_out[port1]
         #print('last_retrans: %d, last_data_segs_out: %d' % (last_retrans[port1], last_data_segs_out[port1]) )
         #print('bbr2_data_segs: %d, cubic_data_segs: %d' % (bbr2_data_segs, cubic_data_segs) )
-        #print('bbr2_retrans: %d, cubic_retrans: %d' % (bbr2_retrans, cubic_retrans) )
+        #print('bbr2_retrans: %d, bbr_retrans: %d, cubic_retrans: %d' % (bbr2_retrans, bbr_retrans, cubic_retrans) )
 
         i += 1
 
@@ -301,11 +304,16 @@ def compute_summary_info (f, all_data):
            bbr2_retrans_rate = round(float(bbr2_retrans) / float(bbr2_data_segs),8)
         else:
            bbr2_retrans_rate = 0
+        if bbr_data_segs > 0:
+           bbr_retrans_rate = round(float(bbr_retrans) / float(bbr_data_segs),8)
+        else:
+           bbr_retrans_rate = 0
 
-    # not needed??
+
     total_retrans_rate = f"{total_retrans_rate:.8f}"  # to make sure not in scientific notation
     cubic_retrans_rate = f"{cubic_retrans_rate:.8f}"  # to make sure not in scientific notation
     bbr2_retrans_rate = f"{bbr2_retrans_rate:.8f}"  # to make sure not in scientific notation
+    bbr_retrans_rate = f"{bbr_retrans_rate:.8f}"  # to make sure not in scientific notation
     #print ('Total data segs: %d ; Total Retransmit rate: %s ; cubic retrans: %s ; bbr2 retrans: %s ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time ))
 
     # add to dict
@@ -317,6 +325,8 @@ def compute_summary_info (f, all_data):
     stream_info['cubic_retrans_rate'] = cubic_retrans_rate
     stream_info['bbr2_data_segs'] = bbr2_data_segs
     stream_info['bbr2_retrans_rate'] = bbr2_retrans_rate
+    stream_info['bbr_data_segs'] = bbr_data_segs
+    stream_info['bbr_retrans_rate'] = bbr_retrans_rate
 
     # also compute median srtt for all srtt samples we took from periodic ss dumps.
     rtts = []
