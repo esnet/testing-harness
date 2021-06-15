@@ -144,7 +144,7 @@ def main():
         #print ("i = %s" % i)
         fh.write(i)
         if options.e_o or options.split:
-            time = float(i.split()[0])
+            time = round(float(i.split()[0]),1)  # need to round, as iperf3 sometimes reports different time values on different streams
             bytes = int(i.split()[1])
             bps = float(i.split()[2])
             retrans = int(i.split()[3])
