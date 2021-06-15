@@ -167,6 +167,8 @@ def read_file():
                     flow_data['cc'] = 'cubic'
                 elif item.startswith('bbr2'):
                     flow_data['cc'] = 'bbr2'
+                elif item.endswith('bbr'):
+                    flow_data['cc'] = 'bbr'
                 elif item.startswith('pmtu'):
                     flow_data['pmtu'] = int(item[item.find(':') + 1:])
                 # tried capturing bytes_sent and delivered, but these appear to not be useful to compute throughput
@@ -287,7 +289,7 @@ def compute_summary_info (f, all_data):
              cubic_retrans += last_retrans[port1]
              cubic_data_segs += last_data_segs_out[port1]
         #print('last_retrans: %d, last_data_segs_out: %d' % (last_retrans[port1], last_data_segs_out[port1]) )
-        #print('bbr2_data_segs: %d, cubic_data_segs: %d' % (bbr2_data_segs, cubic_data_segs) )
+        #print('bbr2_data_segs: %d, cubic_data_segs: %d, bbr_data_segs: %d' % (bbr2_data_segs, cubic_data_segs, bbr_data_segs) )
         #print('bbr2_retrans: %d, bbr_retrans: %d, cubic_retrans: %d' % (bbr2_retrans, bbr_retrans, cubic_retrans) )
 
         i += 1
