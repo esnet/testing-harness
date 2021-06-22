@@ -1,0 +1,4 @@
+hostname,alias,profile
+127.0.0.1,hostA,hostA
+127.0.0.1,hostB,hostB
+127.0.0.1,hostC,WAN
