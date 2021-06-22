@@ -66,7 +66,7 @@ class TestingDaemon:
             return
 
         log.info(f"Found {len(sections)} job definitions")
-        log.debug(sections)
+        log.debug(f"Job list {sections}")
 
         for s in sections:
             try:

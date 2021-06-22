@@ -27,7 +27,7 @@ class AMPQSender(object):
         if not self._channel:
             return
         try:
-            log.debug(f"Sending data ({len(jstr)} items) to archive {self._url}\n")
+            log.debug(f"Sending data ({len(jstr)} items) to archive {self._url}")
             try:
                 self._channel.basic_publish(exchange='',
                                             routing_key=key,
