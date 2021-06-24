@@ -2,9 +2,9 @@
 **
 ** Project Lead: Eashan Adhikarla
 ** Mentor: Ezra Kissel
-** 
+**
 ** Date Created: June 17' 2021
-** Last Modified: June 24' 2021 
+** Last Modified: June 24' 2021
 **
 '''
 
@@ -27,10 +27,10 @@ MAX_TRIES = 10
 VERIFY_CERTS = True
 RETRY = True
 
-es = Elasticsearch( host=HOST, port=PORT, 
-                    timeout=TIMEOUT, 
-                    max_retries=MAX_TRIES, 
-                    verify_certs=VERIFY_CERTS, 
+es = Elasticsearch( host=HOST, port=PORT,
+                    timeout=TIMEOUT,
+                    max_retries=MAX_TRIES,
+                    verify_certs=VERIFY_CERTS,
                     retry_on_timeout=RETRY
                   )
 
@@ -51,7 +51,7 @@ class clr:
     G   = '\033[36m' # Green
     W   = '\033[93m' # Warning
     F   = '\033[91m' # Fail
-    E   = '\033[0m'  # End 
+    E   = '\033[0m'  # End
     BD  = '\033[1m'  # Bold
     UL  = '\033[4m'  # Underline
 
@@ -77,7 +77,7 @@ class GETTER:
             print (f"{clr.F}Empty dict!{clr.E}")
             logging.info(f"{clr.F}Empty dict!{clr.E}")
 
-    def getIndexDetails(self, indexes, total_docs=10):
+    def getIndexDetails(self, indexes, total_docs=100):
         for i in range(1): # len(indexes)):
             try:
                 # Given a index name, finds all the documents in the index
@@ -90,9 +90,9 @@ class GETTER:
                                 )
                 print(f"{indexes[i]} ---> {clr.G}{result['hits']['total']['value']}{clr.E} documents\n")
                 logging.info(f"{indexes[i]} ---> {clr.G}{result['hits']['total']['value']}{clr.E} documents\n")
-                
+
                 documents = [doc for doc in result['hits']['hits']]
-                
+
                 for j in range(len(documents)):
                     # ---------------------
                     # For each job/document
@@ -109,7 +109,7 @@ class GETTER:
 
                     # print(f"uuid: {uuid}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\n\n")
 
-                    # --------------------- 
+                    # ---------------------
                     # For each stream/flow
                     # ---------------------
                     # Intervals
@@ -120,7 +120,7 @@ class GETTER:
                             # 'sender': dict_keys(['retransmits', 'max_rtt', 'sender', 'start', 'bytes', 'mean_rtt', 'end'
                             #                      'max_snd_cwnd', 'bits_per_second', 'socket', 'seconds', 'min_rtt'])
                             # 'receiver': dict_keys(['end', 'bits_per_second', 'sender', 'start', 'socket', 'seconds', 'bytes'])
-                            
+
                             sender_start = documents[j]['_source']['end']['streams'][m]['sender']['start']
                             sender_end = documents[j]['_source']['end']['streams'][m]['sender']['end']
                             sender_retransmits = documents[j]['_source']['end']['streams'][m]['sender']['retransmits']
@@ -154,14 +154,14 @@ class GETTER:
             except:
                 pass
             # print("\nTotal docs found: ", self.sum)
-        
+
         return None
 
 
 def main():
     print("\nStarting ELK testpoint stats retrieval...")
     logging.info("\nStarting ELK testpoint stats retrieval...")
-    
+
     parser = argparse.ArgumentParser(description='Testpoint Statistics')
     parser.add_argument('-t', '--term', default="iperf3*", type=str,
                         help='The search term to find the indexes {"*", "iperf3*", "jobmeta*", "bbrmon*"}')
