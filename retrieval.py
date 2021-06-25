@@ -11,13 +11,22 @@
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
 
+import os
 import pandas as pd
 import requests
 import json
 import argparse
 import logging
+import errno
 
-logging.basicConfig(filename='iperf3.log', level=logging.DEBUG)
+
+try:
+    os.makedirs('data')
+except OSError as e:
+    if e.errno != errno.EEXIST:
+        raise
+
+logging.basicConfig(filename='data/iperf3.log', level=logging.DEBUG)
 
 # Create the elasticsearch client
 HOST = 'nersc-tbn-6.testbed100.es.net'
@@ -77,7 +86,8 @@ class GETTER:
             print (f"{clr.F}Empty dict!{clr.E}")
             logging.info(f"{clr.F}Empty dict!{clr.E}")
 
-    def getIndexDetails(self, indexes, total_docs=100):
+    def getIndexDetails(self, indexes, column_list, total_docs=10):
+        df = pd.DataFrame(columns=column_list)
         for i in range(1): # len(indexes)):
             try:
                 # Given a index name, finds all the documents in the index
@@ -88,8 +98,8 @@ class GETTER:
                                 body={"query":{"match_all":{}}},
                                 size=total_docs,
                                 )
-                print(f"{indexes[i]} ---> {clr.G}{result['hits']['total']['value']}{clr.E} documents\n")
-                logging.info(f"{indexes[i]} ---> {clr.G}{result['hits']['total']['value']}{clr.E} documents\n")
+                print(f"\n{indexes[i]} ---> {clr.G}{result['hits']['total']['value']}{clr.E} documents\n")
+                logging.info(f"\n{indexes[i]} ---> {clr.G}{result['hits']['total']['value']}{clr.E} documents\n")
 
                 documents = [doc for doc in result['hits']['hits']]
 
@@ -106,8 +116,6 @@ class GETTER:
                     #                           'rcvbuf_actual', 'sock_bufsize', 'system_info', 'timestamp', 'connecting_to']))
                     start_dict = documents[j]['_source']['start']
                     num_streams = start_dict['test_start']['num_streams']
-
-                    # print(f"uuid: {uuid}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\n\n")
 
                     # ---------------------
                     # For each stream/flow
@@ -136,26 +144,43 @@ class GETTER:
                             receiver_bytes = documents[j]['_source']['end']['streams'][m]['receiver']['bytes']
                             receiver_bps = documents[j]['_source']['end']['streams'][m]['receiver']['bits_per_second']
 
+                            # print(f"uuid: {uuid}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_start: {sender_start}\n sender_end: {sender_end}\n sender_retransmits: {sender_retransmits}\nsender_bytes: {sender_bytes}\n sender_min_rtt: {sender_min_rtt}\n sender_max_rtt: {sender_max_rtt}\nsender_mean_rtt: {sender_mean_rtt}\n sender_bps: {sender_bps}\n receiver_start: {receiver_start}\nreceiver_end: {receiver_end}\n receiver_seconds: {receiver_seconds}\n receiver_bytes: {receiver_bytes}\nreceiver_bps: {receiver_bps}\n\n")
+                            logging.info(f"uuid: {uuid}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_start: {sender_start}\n sender_end: {sender_end}\n sender_retransmits: {sender_retransmits}\nsender_bytes: {sender_bytes}\n sender_min_rtt: {sender_min_rtt}\n sender_max_rtt: {sender_max_rtt}\nsender_mean_rtt: {sender_mean_rtt}\n sender_bps: {sender_bps}\n receiver_start: {receiver_start}\nreceiver_end: {receiver_end}\n receiver_seconds: {receiver_seconds}\n receiver_bytes: {receiver_bytes}\nreceiver_bps: {receiver_bps}\n\n")
 
-                            print(f"uuid: {uuid}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\n \
-                            sender_start: {sender_start}\n sender_end: {sender_end}\n sender_retransmits: {sender_retransmits}\n \
-                            sender_bytes: {sender_bytes}\n sender_min_rtt: {sender_min_rtt}\n sender_max_rtt: {sender_max_rtt}\n \
-                            sender_mean_rtt: {sender_mean_rtt}\n sender_bps: {sender_bps}\n receiver_start: {receiver_start}\n \
-                            receiver_end: {receiver_end}\n receiver_seconds: {receiver_seconds}\n receiver_bytes: {receiver_bytes}\n \
-                            receiver_bps: {receiver_bps}\n\n")
-
-                            logging.info(f"uuid: {uuid}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\n \
-                            sender_start: {sender_start}\n sender_end: {sender_end}\n sender_retransmits: {sender_retransmits}\n \
-                            sender_bytes: {sender_bytes}\n sender_min_rtt: {sender_min_rtt}\n sender_max_rtt: {sender_max_rtt}\n \
-                            sender_mean_rtt: {sender_mean_rtt}\n sender_bps: {sender_bps}\n receiver_start: {receiver_start}\n \
-                            receiver_end: {receiver_end}\n receiver_seconds: {receiver_seconds}\n receiver_bytes: {receiver_bytes}\n \
-                            receiver_bps: {receiver_bps}\n\n")
+                            df = df.append({'uuid':uuid,
+                                            'timestamp':timestamp,
+                                            'num_streams':num_streams,
+                                            'sender_start':sender_start,
+                                            'sender_end':sender_end,
+                                            'sender_retransmits':sender_retransmits,
+                                            'sender_bytes':sender_bytes,
+                                            'sender_min_rtt':sender_min_rtt,
+                                            'sender_max_rtt':sender_max_rtt,
+                                            'sender_mean_rtt':sender_mean_rtt,
+                                            'sender_bps':sender_bps,
+                                            'receiver_start':receiver_start,
+                                            'receiver_end':receiver_end,
+                                            'receiver_seconds':receiver_seconds,
+                                            'receiver_bytes':receiver_bytes,
+                                            'receiver_bps':receiver_bps
+                                            }, ignore_index=True)
 
             except:
                 pass
             # print("\nTotal docs found: ", self.sum)
+            print("Done parsing!")
+        return df
 
-        return None
+
+# class PLOT:
+#     def __init__(self):
+#         self.
+
+#     def rtt(self): # By algorithm type {cubic, bbrv2} - plot mean, min, max
+#         return NotImplemented
+
+#     def bps(self): # By algorithm type {cubic, bbrv2}
+#         return NotImplemented
 
 
 def main():
@@ -173,12 +198,33 @@ def main():
     print(f"Chosen index type: {args.term}")
     logging.info(f"Chosen index type: {args.term}")
     get = GETTER(args.term)
+
+    # STEP 1. Get all the indices in the ELK given a term.
     indexes = get.getIndexList(args.term)
     for e,i in enumerate(indexes):
         print(f"{e}: {i}")
         logging.info(f"{e}: {i}")
 
-    index_response = get.getIndexDetails(indexes)
+    pandas_column_list = ['uuid',
+                          'timestamp',
+                          'num_streams',
+                          'sender_start','sender_end','sender_retransmits','sender_bytes','sender_min_rtt','sender_max_rtt','sender_mean_rtt','sender_bps',
+                          'receiver_start','receiver_end','receiver_seconds','receiver_bytes','receiver_bps',
+                         ]
+
+    # STEP 2. getIndexDetails to retrieve the statistics of every testpoint
+    # and every stream/flow wrt index
+    index_response = get.getIndexDetails(indexes, pandas_column_list)
+
+    # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
+    try:
+        index_response.to_csv('data/'+str(args.term[:-1])+'.csv')
+        print(f"{str(args.term[:-1])}.csv file written!")
+    except:
+        raise ValueError("Cannot write the file")
+
+    # STEP 4. Plot some of the data for sanity checks and analysis 
+
 
 if __name__ == "__main__":
     main()
