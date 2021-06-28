@@ -31,10 +31,15 @@ class TrafficController(object):
             return
 
     def set_pacing(self, iface, dst, rate):
+        iface_parts = iface.split(".")
+        tagged = False
+        if len(iface_parts) > 1:
+            tagged = True
         ep = f"{self._url}/pacing"
-        d = {"interface": iface,
+        d = {"interface": iface_parts[0],
              "ip": dst,
-             "maxrate": rate
+             "maxrate": rate,
+             "tagged": tagged
              }
         data = json.dumps(d)
         log.debug(f"Setting : {data}")
@@ -44,8 +49,9 @@ class TrafficController(object):
         pass
 
     def clear_pacing(self, iface):
+        iface_parts = iface.split(".")
         ep = f"{self._url}/pacing"
-        d = {"interface": iface}
+        d = {"interface": iface_parts[0]}
         data = json.dumps(d)
         log.debug(f"Setting : {data}")
         self._call(requests.delete, ep, data)
