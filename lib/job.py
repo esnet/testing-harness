@@ -18,7 +18,7 @@ from lib.ss import ss_send_ampq
 from lib.tcpdump import launch_tcpdump
 from lib.tcptrace import launch_tcptrace
 from lib.ampq import AMPQSender
-from lib.profile import ProfileManager
+from lib.profile import ProfileManager, TrafficController
 
 
 loopbacks = ['localhost', '127.0.0.1', '::1']
@@ -76,12 +76,13 @@ class Job:
         self.loss = cfg.get('netem-loss', None)
         self.lat = cfg.get('netem-lat', None)
         self.limit = cfg.get('netem-limit', None)
-        self.pacing = cfg.get('pacing', None)
-        self.lat_sweep = cfg.get('lat-sweep', None)
-        self.limit_sweep = cfg.get('limit-sweep', None)
+        self.pacing = cfg.getlist('pacing', list())
+        self.lat_sweep = cfg.getlist('lat-sweep', list())
+        self.limit_sweep = cfg.getlist('limit-sweep', list())
         self.profile_file = cfg.get('profile-file', None)
         self.profile = cfg.get('profile', None)
         self.profile_manager = ProfileManager(self.profile_file)
+        self.tc = TrafficController()
         self.nic = nic
         self.archive = archive
         self.vector_element = 0
@@ -93,63 +94,16 @@ class Job:
         if self.lat_sweep and self.limit_sweep :
             log.error ("Error: Can not specify both lat-sweeep and limit-sweep in the same test ")
             sys.exit(-1)
-        if self.lat_sweep :
-            self.lat_val_list = []
-            param_args = [x.strip() for x in self.lat_sweep.split(',')]
-            for x in range( 0, len(param_args)) :  
-                 self.lat_val_list.append(param_args[x])
-            #  Hmm, this does not work...
-            #log.info ("will test the following latencies: ", str(self.lat_val_list))
-            logme = "will test the following latencies: " + str(self.lat_val_list) 
-            log.info (logme)
-        if self.limit_sweep :
-            self.limit_val_list = []
-            param_args = [x.strip() for x in self.limit_sweep.split(',')]
-            for x in range( 0, len(param_args)) :  
-                 self.limit_val_list.append(param_args[x])
-            logme = "will test the following netem limits: " + str(self.limit_val_list) 
-            log.info (logme)
-        if self.param_sweep :
-            param_args = [x.strip() for x in self.param_sweep.split(',')]
-            self.param_name = param_args[0]
-            self.param_val_list = []
-            self.param_vector_list = []
-            if param_args[1] == 'sys-module-increment' :
-                # assumes values in config file are: start, end, increment
-                for x in range( int(param_args[2]),int(param_args[3])+1,int(param_args[4]) ) :
-                     self.param_val_list.append(x)
-            elif param_args[1] == 'sys-module-list' :
-                # assumes values in config file are a list of values
-                for x in range( 2, len(param_args)) :
-                     self.param_val_list.append(int(param_args[x]))
-            elif param_args[1] == 'sys-module-vector-list' :
-                # assumes values in config file are a list of values to replace vector element N
-                self.vector_element = int(param_args[2])
-                for x in range( 3, len(param_args)) :  # values start at location 3
-                    self.param_val_list.append(int(param_args[x]))
-                log.info (f"will replace vector element %d with the list of values:" % self.vector_element)
-                try:  # get default values
-                    fname = "/sys/module/" + self.param_name
-                    param_vector_string = open(fname, 'r').read()
-                except:
-                    log.info ("Error: parameter file not found", fname)
-                    sys.exit(-1)
-                vl = [x.strip() for x in param_vector_string.split(',')]
-                #log.info ("parm vector values from host: " , vl)
-                for x in range( 0, len(vl)) :
-                     self.param_vector_list.append(int(vl[x]))
-                #log.info ("param_vector_list: " , self.param_vector_list)
-
-            else :
-                log.info ("param sweep type not supported")
-                sys.exit(0)
-            print ("will run a parameter sweep of variable %s over the following values: " % self.param_name, self.param_val_list)
-            #log.info ("will run a parameter sweep of variable %s over the following values: " % self.param_name, self.param_val_list)
+        if self.lat_sweep:
+            log.info (f"will test the following latencies: {self.lat_sweep}")
+        if self.limit_sweep:
+            log.info (f"will test the following limits: {self.limit_sweep}")
+        if self.pacing:
+            log.info (f"will test the following pacing rates: {self.pacing}")
 
         self.hostname = socket.gethostname()
         self.start_time = datetime.now().strftime('%Y-%m-%d:%H:%M')
         self.outdir = os.path.join(outdir, self.start_time, self.name)
-
         self.hostlist = hostlist
         self.hosts = list()
         if self.hostlist:
@@ -183,33 +137,7 @@ class Job:
         # Configure any profiles for this host
         self.profile_manager.set_profile(host)
 
-        # TODO: clean up this pacing stuff
-        if self.pacing :
-            md["pacing"] = self.pacing
-            if not self.nic :
-                log.error("Error: must specify NIC if using pacing option")
-                sys.exit(-1)
-            of = os.path.join(self.outdir, "pacing.out")
-            cmd = f"{self.util_path}/set-pacing.sh %s %s  > {of}  2>&1 &" % (self.nic, self.pacing)
-            log.debug(f"calling {cmd}")
-            try:
-                p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
-            except subprocess.CalledProcessError as err:
-                print('ERROR setting pacing :', err)
-            log.debug(f"pacing set")
-        else:
-            if self.nic : # clear any pacing setting if nic is set but pacing is not set
-                of = os.path.join(self.outdir, "pacing.out")
-                cmd = f"{self.util_path}/set-pacing.sh %s > {of}  2>&1 &" % (self.nic)
-                log.debug(f"calling {cmd}")
-                try:
-                    p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
-                except subprocess.CalledProcessError as err:
-                    print('ERROR clearing pacing:', err)
-                log.debug(f"pacing cleared")
-
-
-    def _export_md(self, host=None):
+    def _export_md(self, host=None, extra=None):
         def create_meta_host():
             md = {
                 "iter_uuids": self.iter_uuids,
@@ -217,6 +145,8 @@ class Job:
             }
             md.update(host)
             md.update({"profile_settings": self.profile_manager.get_profile(host)})
+            if extra:
+                md.update(extra)
             return md
 
         def create_meta_job():
@@ -225,6 +155,7 @@ class Job:
             # remove things we don't want to export in job meta
             del md["conf"]
             del md["profile_manager"]
+            del md["tc"]
             del md["iter_uuids"]
 
             # jobmeta has no parent
@@ -232,8 +163,7 @@ class Job:
             # get some NIC stats if needed
             if self.nic:
                 md["NIC"] = self.nic
-                cmd = f'ifconfig {self.nic} | grep -i MTU '
-                cmd += ''' | awk '{print $NF}' ''' 
+                cmd = f"cat /sys/class/net/{self.nic}/mtu"
                 log.debug(f"calling {cmd}")
                 try:
                     p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
@@ -242,8 +172,7 @@ class Job:
                 else:
                     mtu = p.stdout.decode('utf-8').rstrip()
                 log.debug(f"got interface MTU: {mtu}")
-                cmd = f'ethtool {self.nic} | grep -i speed ' 
-                cmd += ''' | awk '{print $NF}' '''  
+                cmd = f"cat /sys/class/net/{self.nic}/speed"
                 log.debug(f"calling {cmd}")
                 try:
                     p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
@@ -258,6 +187,9 @@ class Job:
 
         if host:
             dst = host['alias'] if host['alias'] else host['hostname']
+            if extra and isinstance(extra, dict):
+                for k,v in extra.items():
+                    dst += f"-{k}:{v}"
             ofname=f"{self.outdir}/{dst}-meta.json"
             md = create_meta_host()
         else:
@@ -301,9 +233,6 @@ class Job:
         self.stop_instr = True
         if self.ss:
             self.ss_thread.join()
-            # convert results to JSON, use UUID of job metadata to link
-            #  FIXME: needs future uuid mapping per iteration
-            #  FIXME: dont hardcode path to ss_log_parser.py
             cmd = f"uuid={self.iter_uuids[iter-1]} infile=ss:{ofname_suffix} dir={self.outdir} {self.util_path}/ss_log_parser.py"
             # for summary only, add summary_only=true
             log.debug(f"converting ss results to JSON: {cmd}")
@@ -368,6 +297,17 @@ class Job:
             log.error(f"Could not write output for \"{ofname}\": {e}")
             return
 
+    def _run_iters(self, dst, cmd, teststr):
+        # generate UUIDs for each iteration
+        uuids = list()
+        for it in range(0, self.iters):
+            uuids.append(str(uuid.uuid4()))
+        self.iter_uuids = uuids
+
+        for iter in range(1, int(self.iters)+1):
+            ofname_suffix = f"{dst}:{teststr}:{iter}"
+            self.subrun(dst, cmd, iter, ofname_suffix)
+
     def run(self):
         log.info(f"Executing runs for job {self.name} and {self.iters} iterations")
         self._export_md()
@@ -380,113 +320,28 @@ class Job:
             except Exception as e:
                 log.error(f"Could not handle host options for {dst}: {e}")
                 continue
-            # generate UUIDs for each iteration
-            uuids = list()
-            for it in range(0, self.iters):
-                uuids.append(str(uuid.uuid4()))
-            self.iter_uuids = uuids
-            # also export a child jobmeta for each host
-            self._export_md(item)
 
+            # format src command
             cmd = self.src_cmd.format(dst=dst)
             log.info(f"Testing to {dst} using \"{cmd}\"")
 
-            #first ping the host to make sure its up
+            # first ping the host to make sure its up
             png = f'ping -W 5 -c 2 {dst} > /dev/null'
             status = os.system(png)
             if status: # ping failed, skip
                 log.info(f"Error: ping to {dst} failed, error code: \"{status}\"")
                 continue
-            for iter in range(1, int(self.iters)+1):
-                log.debug(f"Starting iteration # {iter} for host {dst}")
-                if self.lat_sweep :
-                    for lat in self.lat_val_list :
-                        rtt=f"%s" % (float(lat) * 2)
-                        ofname_suffix = f"{dst}:{iter}:{rtt}ms"
-                        ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{rtt}ms")
-                        pcmd = f"{self.util_path}/pre-netem.sh %sms %s %s > {ofname}  2>&1 &" % (lat, self.loss, self.limit)
-                        log.info (f"Running command to set netem latency: %s" % pcmd)
-                        try:
-                            status = os.system(pcmd)
-                            #log.debug (f"netem script return code: %s " % status)
-                        except:
-                            log.info ("Error setting netem, Exitting ")
-                            sys.exit(-1)
-                        time.sleep(5)
 
-                        if self.param_sweep :  # if both lat_sweep and param_sweep
-                            self.param_sweep_loop (dst, cmd, iter, lat, self.limit)
-                        else :
-                            self.subrun(dst, cmd, iter, ofname_suffix)
-                elif self.limit_sweep :
-                    for limit in self.limit_val_list :
-                        ofname_suffix = f"{dst}:{iter}:{limit}"
-                        ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{limit}")
-                        pcmd = f"{self.util_path}/pre-netem.sh %s %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, limit)
-                        log.info (f"Running command to set netem latency: %s" % pcmd)
-                        try:
-                            status = os.system(pcmd)
-                        except:
-                            log.info ("Error setting netem, Exitting ")
-                            sys.exit(-1)
-                        time.sleep(5)
+            # XXX: need a generalize method to expand sweep options and collect md for each
+            for pace in self.pacing:
+                self.tc.clear_pacing(self.nic)
+                self.tc.set_pacing(self.nic, dst, pace)
+                self._run_iters(dst, cmd, f"pacing:{pace}")
+                # export a child jobmeta for each new "job" defined by a sweep parameter
+                self._export_md(item, {"pacing": pace})
 
-                        if self.param_sweep :  # if both limit_sweep and param_sweep
-                            self.param_sweep_loop (dst, cmd, iter, self.lat, limit)
-                        else :
-                            self.subrun(dst, cmd, iter, ofname_suffix)
-                elif self.lat :  # single netem lat only 
-                    rtt=f"%s" % (float(self.lat) * 2)
-                    ofname_suffix = f"{dst}:{iter}:{rtt}ms"
-                    ofname = os.path.join(self.outdir, f"pre-netem:{dst}:{iter}:{rtt}ms")
-                    pcmd = f"{self.util_path}pre-netem.sh %sms %s %s > {ofname}  2>&1 &" % (self.lat, self.loss, self.limit)
-                    log.info (f"Running command to set netem latency: %s" % pcmd)
-                    try:
-                        status = os.system(pcmd)
-                    except:
-                        log.info ("Error setting netem, Exitting ")
-                        sys.exit(-1)
-                    time.sleep(5)
-                    self.subrun(dst, cmd, iter, ofname_suffix)
-                elif self.param_sweep :  # if param_sweep only
-                    self.param_sweep_loop (dst, cmd, iter, self.lat, self.limit)
-                else:
-                    ofname_suffix = f"{dst}:{iter}"
-                    self.subrun(dst, cmd, iter, ofname_suffix)
             # reset any profiles that were set as part of option handling
             self.profile_manager.clear_profile(item)
-
-
-    def param_sweep_loop (self, dst, cmd, iter, lat, limit):
-         for val in self.param_val_list :
-                if self.vector_element > 0 : # special handling if param is a vector
-                      #log.info (f"replacing value for parameter vector element number: %d" % self.vector_element)
-                      loc = self.vector_element-1
-                      self.param_vector_list[loc] = val
-                      converted_list = [str(element) for element in self.param_vector_list]
-                      vector_string = ",".join(converted_list)
-                      pcmd = f"echo %s > /sys/module/%s" % (vector_string, self.param_name)
-                else :
-                      pcmd = f"echo %d > /sys/module/%s" % (val, self.param_name)
-    
-                log.info (f"Running command to set bbr2 param: %s" % pcmd)
-                try:
-                      os.system(pcmd)
-                except:
-                      log.info ("Error setting parameter value, Exitting ")
-                      sys.exit(-1)
-                param = self.param_name.split('/')[-1]
-                if self.lat_sweep:
-                      # put RTT, not lat, in the file name
-                      rtt=f"%s" % (float(lat) * 2)
-                      ofname_suffix = f"{dst}:{iter}:{param}:{val}:{rtt}ms"
-                elif self.limit_sweep:
-                      ofname_suffix = f"{dst}:{iter}:{param}:{val}:{limit}"
-                else :
-                      ofname_suffix = f"{dst}:{iter}:{param}:{val}"
-                log.info (f"output files will have suffix: %s" % ofname_suffix)
-                self.subrun(dst, cmd, iter, ofname_suffix)
-
 
     def subrun(self, dst, cmd, iter, ofname_suffix):
         # Start instrumentation (per iter)

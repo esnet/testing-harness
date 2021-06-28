@@ -57,7 +57,8 @@ class TestingDaemon:
 
     def _setup(self):
         jfile = self.conf['job_file']
-        parser = ConfigParser(allow_no_value=True)
+        parser = ConfigParser(allow_no_value=True,
+                              converters={'list': lambda x: [i.strip() for i in x.split(',')]})
         try:
             jobs = parser.read(jfile)
             sections = parser.sections()

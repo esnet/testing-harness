@@ -9,9 +9,48 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 log = logging.getLogger("harness")
 
-class NetemHandler(object):
-    DEF_BASE_URL = "https://localhost:5000/api/dtnaas/agent/tc"
+DEF_BASE_URL = "https://localhost:5000/api/dtnaas/agent/tc"
 
+class TrafficController(object):
+    def __init__(self, url=DEF_BASE_URL, user="admin", passwd="admin"):
+        self._url = url
+        self._user = user
+        self._passwd = passwd
+
+    def _call(self, fn, url, data=None):
+        hdrs = {"Content-type": "application/json"}
+        try:
+            res = fn(url,
+                     data=data,
+                     auth=(self._user, self._passwd),
+                     headers=hdrs,
+                     verify=False)
+            log.debug(f"Traffic Control agent response: {res.status_code} ({res.text.strip()})")
+        except Exception as e:
+            log.error(f"Could not set traffic control: {e}")
+            return
+
+    def set_pacing(self, iface, dst, rate):
+        ep = f"{self._url}/pacing"
+        d = {"interface": iface,
+             "ip": dst,
+             "maxrate": rate
+             }
+        data = json.dumps(d)
+        log.debug(f"Setting : {data}")
+        self._call(requests.post, ep, data)
+
+    def update_pacing(self, iface, dst, maxrate):
+        pass
+
+    def clear_pacing(self, iface):
+        ep = f"{self._url}/pacing"
+        d = {"interface": iface}
+        data = json.dumps(d)
+        log.debug(f"Setting : {data}")
+        self._call(requests.delete, ep, data)
+
+class NetemHandler(object):
     def __init__(self, url=DEF_BASE_URL, user="admin", passwd="admin"):
         self._url = url
         self._user = user
