@@ -14,10 +14,14 @@ plot: utilities needed to generate Gnuplot graphs
 ### Example execution
 
 Sample command to run a single test:
-   ./collect.py -j ini/single.ini -o /var/log/bbr2 -H ini/test-hosts.csv 
+~~~
+./collect.py -j ini/single.ini -o /var/log/bbr2 -H ini/test-hosts.csv 
+~~~
 
 Sample cron entry:
-   /harness/collect.py -v -i ens2 -j /harness/ini/perfsonar.ini -o /var/log/bbr2 -H /harness/ini/test-hosts.csv -a bbr-mon.es.net >> /tmp/harness.out 2>&1 
+~~~
+/harness/collect.py -v -i ens2 -j /harness/ini/perfsonar.ini -o /var/log/bbr2 -H /harness/ini/test-hosts.csv -a bbr-mon.es.net >> /tmp/harness.out 2>&1 
+~~~
 
 ### iperf3 example output with default settings (localhost test)
 ```
