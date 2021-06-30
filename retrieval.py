@@ -4,7 +4,7 @@
 ** Mentor: Ezra Kissel
 **
 ** Date Created: June 17' 2021
-** Last Modified: June 29' 2021
+** Last Modified: June 30' 2021
 **
 '''
 
@@ -27,7 +27,7 @@ except OSError as e:
     if e.errno != errno.EEXIST:
         raise
 
-logging.basicConfig(filename='data/iperf3.log', level=logging.INFO) #logging.DEBUG)
+logging.basicConfig(filename='data/statistics.log', level=logging.INFO) #logging.DEBUG)
 
 # Create the elasticsearch client
 HOST = 'nersc-tbn-6.testbed100.es.net'
@@ -87,7 +87,7 @@ class GETTER:
             print (f"{clr.F}Empty dict!{clr.E}")
             logging.info (f"Empty dict!")
 
-    def getIndexDetails(self, iperf3, jobmeta, column_list, total_docs=1000):
+    def getIndexDetails(self, iperf3, jobmeta, column_list, interval=False, total_docs=1000):
         df = pd.DataFrame(columns=column_list)
 
         for i in range(len(jobmeta)):
@@ -122,6 +122,7 @@ class GETTER:
                             try:
                                 iter_uuid = jobmeta_documents[jobmetadoc]['_source']['iter_uuids']
                                 alias = jobmeta_documents[jobmetadoc]['_source']['alias']
+                                pacing = jobmeta_documents[jobmetadoc]['_source']['pacing'] 
 
                                 if uuid in iter_uuid:
                                     # Hostname
@@ -135,46 +136,87 @@ class GETTER:
                                     start_dict = iperf3_documents[iperfdoc]['_source']['start']
                                     num_streams = start_dict['test_start']['num_streams']
 
-                                    # Congestion Type
-                                    sender_congestion = iperf3_documents[iperfdoc]['_source']['end']['sender_tcp_congestion']
-                                    receiver_congestion = iperf3_documents[iperfdoc]['_source']['end']['receiver_tcp_congestion']
+                                    if not interval:
+                                        # Bits per second (bps) is the throughput
+                                        sender_throughput = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['sender']['bits_per_second']
+                                        receiver_throughput = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['receiver']['bits_per_second']
 
-                                    # ---------------------
-                                    # For each stream/flow
-                                    # ---------------------
-                                    # Intervals
-                                    intervals_list = iperf3_documents[iperfdoc]['_source']['intervals']
-                                    for itrv in range(len(intervals_list)):
-                                        for streams in range(num_streams):
-                                            # Format: dict_keys(['receiver', 'sender'])
-                                            # 'sender': dict_keys(['retransmits', 'max_rtt', 'sender', 'start', 'bytes', 'mean_rtt', 'end'
-                                            #                      'max_snd_cwnd', 'bits_per_second', 'socket', 'seconds', 'min_rtt'])
-                                            # 'receiver': dict_keys(['end', 'bits_per_second', 'sender', 'start', 'socket', 'seconds', 'bytes'])
+                                        # Round trip time (rtt) for the LATENCY calculation
+                                        sender_min_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['sender']['min_rtt']/2
+                                        sender_max_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['sender']['max_rtt']/2
+                                        sender_mean_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['sender']['mean_rtt']/2
 
-                                            sender_throughput = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['bits_per_second']
-                                            sender_min_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['min_rtt']/2
-                                            sender_max_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['max_rtt']/2
-                                            sender_mean_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['mean_rtt']/2
-                                            sender_retransmits = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['retransmits']
-                                            receiver_throughput = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['receiver']['bits_per_second']
+                                        # Retransmits for LOSS calculation
+                                        sender_retransmits = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['sender']['retransmits']
 
-                                            # print (f"uuid: {uuid}\nhostname: {hostname}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nsender_min_rtt: {sender_min_rtt}\nsender_max_rtt: {sender_max_rtt}\nsender_mean_rtt: {sender_mean_rtt}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nsender_retransmits: {sender_retransmits}\n\n")
-                                            logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nsender_min_rtt: {sender_min_rtt}\nsender_max_rtt: {sender_max_rtt}\nsender_mean_rtt: {sender_mean_rtt}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nsender_retransmits: {sender_retransmits}\n\n")
+                                        # Congestion Type
+                                        sender_congestion = iperf3_documents[iperfdoc]['_source']['end']['sender_tcp_congestion']
+                                        receiver_congestion = iperf3_documents[iperfdoc]['_source']['end']['receiver_tcp_congestion']
 
-                                            df = df.append({'UUID':uuid,
-                                                            'HOSTNAME':hostname,
-                                                            'ALIAS':alias,
-                                                            'TIMESTAMP':timestamp,
-                                                            'STREAMS':num_streams,
-                                                            'THROUGHPUT (Sender)':sender_throughput,
-                                                            'THROUGHPUT (Receiver)':receiver_throughput,
-                                                            'LATENCY (min.)':sender_min_rtt,
-                                                            'LATENCY (max.)':sender_max_rtt,
-                                                            'LATENCY (mean)':sender_mean_rtt,
-                                                            'CONGESTION (Sender)':sender_congestion,
-                                                            'CONGESTION (Receiver)':receiver_congestion,
-                                                            'RETRANSMITS':sender_retransmits,
-                                                            }, ignore_index=True)
+                                        # Transmitted bytes for the testpoint
+                                        receiver_bytes = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['receiver']['bytes']
+
+                                        # print (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
+                                        logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
+
+                                        df = df.append({'UUID':uuid,
+                                                        'HOSTNAME':hostname,
+                                                        'ALIAS':alias,
+                                                        'TIMESTAMP':timestamp,
+                                                        'STREAMS':num_streams,
+                                                        'PACING':pacing,
+                                                        'THROUGHPUT (Sender)':sender_throughput,
+                                                        'THROUGHPUT (Receiver)':receiver_throughput,
+                                                        'LATENCY (min.)':sender_min_rtt,
+                                                        'LATENCY (max.)':sender_max_rtt,
+                                                        'LATENCY (mean)':sender_mean_rtt,
+                                                        'RETRANSMITS':sender_retransmits,
+                                                        'CONGESTION (Sender)':sender_congestion,
+                                                        'CONGESTION (Receiver)':receiver_congestion,
+                                                        'BYTES (Receiver)':receiver_bytes,
+                                                        }, ignore_index=True)
+
+                                    if interval:
+                                        # Congestion Type
+                                        sender_congestion = iperf3_documents[iperfdoc]['_source']['end']['sender_tcp_congestion']
+                                        receiver_congestion = iperf3_documents[iperfdoc]['_source']['end']['receiver_tcp_congestion']
+                                        # ---------------------
+                                        # For each stream/flow
+                                        # ---------------------
+                                        # Intervals
+                                        intervals_list = iperf3_documents[iperfdoc]['_source']['intervals']
+                                        for itrv in range(len(intervals_list)):
+                                            for streams in range(num_streams):
+                                                # Format: dict_keys(['receiver', 'sender'])
+                                                # 'sender': dict_keys(['retransmits', 'max_rtt', 'sender', 'start', 'bytes', 'mean_rtt', 'end'
+                                                #                      'max_snd_cwnd', 'bits_per_second', 'socket', 'seconds', 'min_rtt'])
+                                                # 'receiver': dict_keys(['end', 'bits_per_second', 'sender', 'start', 'socket', 'seconds', 'bytes'])
+
+                                                sender_throughput = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['bits_per_second']
+                                                sender_min_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['min_rtt']/2
+                                                sender_max_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['max_rtt']/2
+                                                sender_mean_rtt = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['mean_rtt']/2
+                                                sender_retransmits = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['sender']['retransmits']
+                                                receiver_throughput = iperf3_documents[iperfdoc]['_source']['end']['streams'][streams]['receiver']['bits_per_second']
+
+                                                # print (f"uuid: {uuid}\nhostname: {hostname}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nsender_min_rtt: {sender_min_rtt}\nsender_max_rtt: {sender_max_rtt}\nsender_mean_rtt: {sender_mean_rtt}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nsender_retransmits: {sender_retransmits}\n\n")
+                                                logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nsender_min_rtt: {sender_min_rtt}\nsender_max_rtt: {sender_max_rtt}\nsender_mean_rtt: {sender_mean_rtt}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nsender_retransmits: {sender_retransmits}\n\n")
+
+                                                df = df.append({'UUID':uuid,
+                                                                'HOSTNAME':hostname,
+                                                                'ALIAS':alias,
+                                                                'TIMESTAMP':timestamp,
+                                                                'STREAMS':num_streams,
+                                                                'PACING':pacing,
+                                                                'THROUGHPUT (Sender)':sender_throughput,
+                                                                'THROUGHPUT (Receiver)':receiver_throughput,
+                                                                'LATENCY (min.)':sender_min_rtt,
+                                                                'LATENCY (max.)':sender_max_rtt,
+                                                                'LATENCY (mean)':sender_mean_rtt,
+                                                                'CONGESTION (Sender)':sender_congestion,
+                                                                'CONGESTION (Receiver)':receiver_congestion,
+                                                                'RETRANSMITS':sender_retransmits,
+                                                                }, ignore_index=True)
                             except:
                                 pass                                  
             except:
@@ -191,7 +233,7 @@ class TIMEWINDOW:
         self.to_date = to_date
     
     def timeFormatter(self):
-        if self.to_date is None:
+        if self.to_date=="empty": # is None:
             curr = datetime.datetime.now()
             self.to_date = f"{curr.year}-{curr.month}-{curr.day}"
         
@@ -224,33 +266,35 @@ def main(verbose=False):
     parser = argparse.ArgumentParser(description='Testpoint Statistics')
     parser.add_argument('-t', '--term', default="*", type=str,
                         help='The search term to find the indexes {"*", "iperf3*", "jobmeta*", "bbrmon*"}')
-    parser.add_argument('--from_date', default="2021-05-01", type=str,
+    parser.add_argument('-F', '--from_date', default="2021-05-01", type=str,
                         help='Get all the testpoint stats starting from this date | Format: yyyy-mm-dd')
-    parser.add_argument('--to_date', default=None, type=str,
+    parser.add_argument('-T', '--to_date', default="empty", type=str,
                         help='Get all the testpoint stats until this date | Format: yyyy-mm-dd')
+    parser.add_argument('-i', '--interval', action='store_true',
+                        help='Interval=True will retreive per test per interval statistics')
     args = parser.parse_args()
-
-    print(f"Chosen index type: {args.term}")
-    logging.info (f"Chosen index type: {args.term}")
+    for arg in vars(args):
+        print (f"{arg} {getattr(args, arg) : ^25}")
+        logging.info (f"{arg} {getattr(args, arg)}")
+    
     get = GETTER(args.term)
 
     # ----------------------------------------------------
     # STEP 1. Get all the indices in the ELK given a term.
     # ----------------------------------------------------
     indexes = get.getIndexList(args.term)
+    if verbose:
+        for e,i in enumerate(indexes):
+            print (f"{e}: {i}")
+            logging.info (f"{e}: {i}")
 
     # Filtering indexes based on time window
     tw = TIMEWINDOW(args.from_date, args.to_date)
     timewindow = tw.timeFormatter()
     filteredIndex = tw.filterWindow(indexes, timewindow)
 
-    if verbose:
-        for e,i in enumerate(indexes):
-            print (f"{e}: {i}")
-            logging.info (f"{e}: {i}")
-
     # Filtering indexes by type
-    sorted_index = sorted(indexes)
+    sorted_index = sorted(filteredIndex)
     iperf3 = [i for i in sorted_index if i.startswith("iperf3")]
     jobmeta = [i for i in sorted_index if i.startswith("jobmeta")]
     ss = [i for i in sorted_index if i.startswith("ss")]
@@ -265,7 +309,7 @@ def main(verbose=False):
         print("New indexes got added, missing in the working list!")
         logging.info ("New indexes got added, missing in the working list!")
         missing = sorted_index - (iperf3+jobmeta+ss+bbrmon_jobmeta+bbrmon_pscheduler+bbrmon_ss+bbrmon_tcptrace+miscellaneous)
-        for e,i in enumerate(indexes):
+        for e,i in enumerate(missing):
             print (f"{e}: {i}")
             logging.info (f"{e}: {i}")
 
@@ -274,23 +318,25 @@ def main(verbose=False):
                           'ALIAS',
                           'TIMESTAMP',
                           'STREAMS',
+                          'PACING',
                           'THROUGHPUT (Sender)', 'THROUGHPUT (Receiver)',
                           'LATENCY (min.)', 'LATENCY (max.)', 'LATENCY (mean)',
-                          'CONGESTION (Sender)', 'CONGESTION (Receiver)',
                           'RETRANSMITS',
+                          'CONGESTION (Sender)', 'CONGESTION (Receiver)',
+                          'BYTES (Receiver)',
                          ]
     
     # ---------------------------------------------------------------------
     # STEP 2. getIndexDetails to retrieve the statistics of every testpoint
     # and every stream/flow wrt index
     # ---------------------------------------------------------------------
-    index_response = get.getIndexDetails(iperf3, jobmeta, pandas_column_list)
+    index_response = get.getIndexDetails(iperf3, jobmeta, pandas_column_list, interval=args.interval, total_docs=1000)
 
     # --------------------------------------------------------------------------
     # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
     # --------------------------------------------------------------------------
     if args.term=="*":
-        filename = "all"
+        filename = "statistics"
     else:
         filename = args.term[:-1]
 
