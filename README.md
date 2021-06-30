@@ -42,3 +42,11 @@ See ini/perfsonar-throughput-example.ini for options. Note that the harness expe
 ### Plotting
 
 TBD
+
+### ELK Statistics Retrieval
+
+'''python
+python3 --term "*" --from-date "2021-05-01" --to-date "2021-06-30"
+'''
+Ignore the flag `--to-date` if retrieving until the current date.
+The `log` and `csv` dataframe is files are going to be generated automatically in the `/data` folder.
