@@ -87,7 +87,21 @@ class GETTER:
             print (f"{clr.F}Empty dict!{clr.E}")
             logging.info (f"Empty dict!")
 
-    def getIndexDetails(self, iperf3, jobmeta, column_list, interval=False, total_docs=1000):
+    def getIndexDetails_bbrmon(self, bbrmon_pscheduler, bbrmon_jobmeta, column_list, interval=False, total_docs=10000):
+        df = pd.DataFrame(columns=column_list)
+
+        for i in range(len(bbrmon_jobmeta)):
+            try:
+                bbrmon_jobmeta_result = es.search(index=jobmeta[i],
+                                                  body={"query":{"match_all":{}}},
+                                                  size=total_docs,
+                                                  )
+
+                bbrmon_jobmeta_documents = [doc for doc in bbrmon_jobmeta_result['hits']['hits']]
+            except:
+                pass
+
+    def getIndexDetails(self, iperf3, jobmeta, column_list, interval=False, total_docs=10000):
         df = pd.DataFrame(columns=column_list)
 
         for i in range(len(jobmeta)):
@@ -130,7 +144,7 @@ class GETTER:
 
                                     # @timestamp
                                     timestamp = iperf3_documents[iperfdoc]['_source']['@timestamp']
-                        
+
                                     # start (Format: dict_keys(['cookie', 'test_start', 'tcp_mss_default', 'version', 'connected', 'sndbuf_actual',
                                     #                           'rcvbuf_actual', 'sock_bufsize', 'system_info', 'timestamp', 'connecting_to']))
                                     start_dict = iperf3_documents[iperfdoc]['_source']['start']
@@ -157,7 +171,7 @@ class GETTER:
                                         receiver_bytes = iperf3_documents[iperfdoc]['_source']['end']['streams'][0]['receiver']['bytes']
 
                                         # print (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
-                                        logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
+                                        # logging.info (f"uuid: {uuid}\nhostname: {hostname}\nalias: {alias}\ntimestamp: {timestamp}\nnum_streams: {num_streams}\nsender_throughput: {sender_throughput}\nreceiver_throughput: {receiver_throughput}\nlatency (min): {sender_min_rtt}\nlatency (max): {sender_max_rtt}\nlatency (mean): {sender_mean_rtt}\nsender_retransmits: {sender_retransmits}\nsender_congestion: {sender_congestion}\nreceiver_congestion: {receiver_congestion}\nreceiver_bytes: {receiver_bytes}\n\n")
 
                                         df = df.append({'UUID':uuid,
                                                         'HOSTNAME':hostname,
@@ -218,7 +232,7 @@ class GETTER:
                                                                 'RETRANSMITS':sender_retransmits,
                                                                 }, ignore_index=True)
                             except:
-                                pass                                  
+                                pass
             except:
                 pass
         return df
@@ -231,12 +245,12 @@ class TIMEWINDOW:
     def __init__(self, from_date, to_date):
         self.from_date = from_date
         self.to_date = to_date
-    
+
     def timeFormatter(self):
-        if self.to_date=="empty": # is None:
+        if self.to_date=="empty":  #is None:
             curr = datetime.datetime.now()
             self.to_date = f"{curr.year}-{curr.month}-{curr.day}"
-        
+
         self.from_date = datetime.datetime.strptime(self.from_date, '%Y-%m-%d').date()
         self.to_date   = datetime.datetime.strptime(self.to_date, '%Y-%m-%d').date()
         time_window = (self.from_date, self.to_date)
@@ -276,7 +290,7 @@ def main(verbose=False):
     for arg in vars(args):
         print (f"{arg} {getattr(args, arg) : ^25}")
         logging.info (f"{arg} {getattr(args, arg)}")
-    
+
     get = GETTER(args.term)
 
     # ----------------------------------------------------
@@ -303,7 +317,7 @@ def main(verbose=False):
     bbrmon_ss = [i for i in sorted_index if i.startswith("bbrmon-ss")]
     bbrmon_tcptrace = [i for i in sorted_index if i.startswith("bbrmon-tcptrace")]
     miscellaneous = [i for i in sorted_index if i not in (iperf3+jobmeta+ss+bbrmon_jobmeta+bbrmon_pscheduler+bbrmon_ss+bbrmon_tcptrace)]
-    
+
     flag1 = len(iperf3+jobmeta+ss+bbrmon_jobmeta+bbrmon_pscheduler+bbrmon_ss+bbrmon_tcptrace+miscellaneous) == len(sorted_index)
     if not flag1:
         print("New indexes got added, missing in the working list!")
@@ -325,27 +339,32 @@ def main(verbose=False):
                           'CONGESTION (Sender)', 'CONGESTION (Receiver)',
                           'BYTES (Receiver)',
                          ]
-    
+
     # ---------------------------------------------------------------------
     # STEP 2. getIndexDetails to retrieve the statistics of every testpoint
     # and every stream/flow wrt index
     # ---------------------------------------------------------------------
-    index_response = get.getIndexDetails(iperf3, jobmeta, pandas_column_list, interval=args.interval, total_docs=1000)
-
+    index_response = get.getIndexDetails(iperf3, jobmeta, pandas_column_list, interval=False, total_docs=10000)
+    print(f"Records: {clr.G}{len(index_response)}{clr.E}")
     # --------------------------------------------------------------------------
     # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
     # --------------------------------------------------------------------------
+    files = os.listdir("data") # Reading all the previously written files
+    last_filename = files[-1] # Get the last file name
+
+    num = int(last_filename.split("-")[1].split(".")[0]) # Extract the number from the last filename
+
     if args.term=="*":
-        filename = "statistics"
+        filename = "statistics-"+str(num+1)
     else:
         filename = args.term[:-1]
 
     try:
         index_response.to_csv('data/'+str(filename)+'.csv')
         print (f"{str(filename)}.csv file written!")
-        logging.info (f"{str(filename)}.csv file written!")
+        logging.info (f"'{clr.G}{str(filename)}.csv{clr.E}' file written!")
     except:
-        raise ValueError("Cannot write the file")
+        raise ValueError("{clr.F}File not written!{clr.E}")
 
 
 if __name__ == "__main__":
