@@ -4,7 +4,7 @@
 ** Mentor: Ezra Kissel
 **
 ** Date Created: June 17' 2021
-** Last Modified: June 30' 2021
+** Last Modified: July 13' 2021
 **
 '''
 
@@ -19,7 +19,7 @@ import argparse
 import logging
 import errno
 import re, datetime
-
+import glob
 
 try:
     os.makedirs('data')
@@ -87,19 +87,53 @@ class GETTER:
             print (f"{clr.F}Empty dict!{clr.E}")
             logging.info (f"Empty dict!")
 
-    def getIndexDetails_bbrmon(self, bbrmon_pscheduler, bbrmon_jobmeta, column_list, interval=False, total_docs=10000):
+    def getIndexDetails_bbrmon(self, bbrmon_pscheduler, column_list, total_docs=10000):
         df = pd.DataFrame(columns=column_list)
 
-        for i in range(len(bbrmon_jobmeta)):
-            try:
-                bbrmon_jobmeta_result = es.search(index=jobmeta[i],
-                                                  body={"query":{"match_all":{}}},
-                                                  size=total_docs,
-                                                  )
+        for i in range(len(bbrmon_pscheduler)):
+            bbrmon_pscheduler_result = es.search(index=bbrmon_pscheduler[i],
+                                                 body={"query":{"match_all":{}}},
+                                                 size=total_docs,
+                                                )
+            bbrmon_pscheduler_documents = [docs for docs in bbrmon_pscheduler_result['hits']['hits']]
+            
+            for bbrmondoc in range(len(bbrmon_pscheduler_documents)):
+            # ---------------------
+            # For each job/document
+            # ---------------------
+            # Format:
+                try:
+                    uuid = bbrmon_pscheduler_documents[bbrmondoc]['_source']['id']
+                    src_hostname = bbrmon_pscheduler_documents[bbrmondoc]['_source']['meta']['source']['hostname']
+                    dst_hostname = bbrmon_pscheduler_documents[bbrmondoc]['_source']['meta']['destination']['hostname']
+                    throughput = bbrmon_pscheduler_documents[bbrmondoc]['_source']['result']['throughput']
+                    retransmits = bbrmon_pscheduler_documents[bbrmondoc]['_source']['result']['retransmits']
 
-                bbrmon_jobmeta_documents = [doc for doc in bbrmon_jobmeta_result['hits']['hits']]
-            except:
-                pass
+                    mean_rtt, sum_rtt = 0.0, 0.0
+                    mean_btys, sum_byts = 0.0, 0.0
+                    intvl_len = len(bbrmon_pscheduler_documents[bbrmondoc]['_source']['result']['intervals']['json'])
+                    for intvl in range(intvl_len):
+                        sum_rtt += bbrmon_pscheduler_documents[bbrmondoc]['_source']['result']['intervals']['json'][intvl]['streams'][0]['rtt']/2 # Divide by 2 to get the latency
+                        sum_byts += bbrmon_pscheduler_documents[bbrmondoc]['_source']['result']['intervals']['json'][intvl]['streams'][0]['throughput-bytes']
+
+                    mean_rtt = (sum_rtt/intvl_len)
+                    mean_btys = (sum_byts/intvl_len)
+
+                    # print (f"uuid: {uuid}\nsrc hostname: {src_hostname}\ndst hostname: {dst_hostname}\nthroughput: {throughput}\nLatency: {mean_rtt}\nretransmits: {retransmits}\nbytes: {mean_btys}\n\n")
+                    # logging.info (f"uuid: {uuid}\nsrc hostname: {src_hostname}\ndst hostname: {dst_hostname}\nthroughput: {throughput}\nLatency: {mean_rtt}\nretransmits: {retransmits}\nbytes: {mean_btys}\n\n")
+
+                    df = df.append({'UUID':uuid,
+                                    'SRC HOSTNAME':src_hostname,
+                                    'DST HOSTNAME':dst_hostname,
+                                    'THROUGHPUT (mean)':throughput,
+                                    'LATENCY (mean)':mean_rtt,
+                                    'RETRANSMITS (mean)':retransmits,
+                                    'BYTES (mean)':mean_btys,
+                                    }, ignore_index=True)
+
+                except Exception as e:
+                    print("Exception: ", e)
+        return df
 
     def getIndexDetails(self, iperf3, jobmeta, column_list, interval=False, total_docs=10000):
         df = pd.DataFrame(columns=column_list)
@@ -286,6 +320,8 @@ def main(verbose=False):
                         help='Get all the testpoint stats until this date | Format: yyyy-mm-dd')
     parser.add_argument('-i', '--interval', action='store_true',
                         help='Interval=True will retreive per test per interval statistics')
+    parser.add_argument('-o','--type', default="iperf3", type=str,
+                        help='Chose option for pulling type of index details {iperf3, bbrmon}')
     args = parser.parse_args()
     for arg in vars(args):
         print (f"{arg} {getattr(args, arg) : ^25}")
@@ -327,7 +363,7 @@ def main(verbose=False):
             print (f"{e}: {i}")
             logging.info (f"{e}: {i}")
 
-    pandas_column_list = ['UUID',
+    iperf3_column_list = ['UUID',
                           'HOSTNAME',
                           'ALIAS',
                           'TIMESTAMP',
@@ -339,18 +375,37 @@ def main(verbose=False):
                           'CONGESTION (Sender)', 'CONGESTION (Receiver)',
                           'BYTES (Receiver)',
                          ]
+    bbrmon_column_list = ['UUID',
+                          'SRC HOSTNAME',
+                          'DST HOSTNAME',
+                          'THROUGHPUT (mean)',
+                          'LATENCY (mean)',
+                          'RETRANSMITS (mean)',
+                          'BYTES (mean)',
+                          ]
 
     # ---------------------------------------------------------------------
-    # STEP 2. getIndexDetails to retrieve the statistics of every testpoint
+    # STEP 2.a. getIndexDetails to retrieve the statistics of every testpoint
     # and every stream/flow wrt index
+    # STEP 2.b. Create a Pandas Dataframe to make it easier for the model to read
     # ---------------------------------------------------------------------
-    index_response = get.getIndexDetails(iperf3, jobmeta, pandas_column_list, interval=False, total_docs=10000)
+    if args.type == "bbrmon":
+        if len(bbrmon_pscheduler)==0:
+            print("No indexes in the given time window!")
+        else:
+            index_response = get.getIndexDetails_bbrmon(bbrmon_pscheduler, bbrmon_column_list, total_docs=10000)
+    elif args.type == "iperf3": # considering else as iperf3 only*
+        index_response = get.getIndexDetails(iperf3, jobmeta, iperf3_column_list, interval=False, total_docs=10000)
+
     print(f"Records: {clr.G}{len(index_response)}{clr.E}")
     # --------------------------------------------------------------------------
-    # STEP 3. Create a Pandas Dataframe to make it easier for the model to read.
+    # STEP 3. Writer to write the dataframe into a csv file
+    # takes care of the naming, if ran the script multiple times
     # --------------------------------------------------------------------------
-    files = os.listdir("data") # Reading all the previously written files
-    last_filename = files[-1] # Get the last file name
+    # files = os.listdir("data")
+    
+    files = glob.glob("data/*.csv") # Reading all the previously written files
+    last_filename = files[-1]  # Get the last file name
 
     num = int(last_filename.split("-")[1].split(".")[0]) # Extract the number from the last filename
 
