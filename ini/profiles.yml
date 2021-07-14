@@ -4,6 +4,7 @@ profiles:
     latency: 80ms
     loss: 0.001%
     limit: 10000
+    rate: 500Mbit
 
   hostA:
     interface: eth200

@@ -81,11 +81,16 @@ class Job:
         self.limit_sweep = cfg.getlist('limit-sweep', list())
         self.profile_file = cfg.get('profile-file', None)
         self.profile = cfg.get('profile', None)
-        self.profile_manager = ProfileManager(self.profile_file)
-        self.tc = TrafficController()
+        self.profile_control_url = cfg.get('profile-control-url', None)
+        self.traffic_control_url = cfg.get('traffic-control-url', None)
+        self.profile_manager = ProfileManager(self.profile_file, self.profile_control_url)
+        self.tc = TrafficController(self.traffic_control_url)
         self.nic = nic
         self.archive = archive
         self.vector_element = 0
+
+        if self.pacing and not self.nic:
+            raise Exception("Invalid job options: selecting pacing requires interface specification, see harness options")
 
         # determine where our util/script files are located
         abspath = os.path.dirname(os.path.abspath(__file__))
@@ -134,6 +139,12 @@ class Job:
         pass
 
     def _handle_opts(self, host):
+        try:
+            # First reset any profiles that were set as part of option handling
+            self.profile_manager.clear_profile(host)
+        except:
+            # ignore any exceptions that may occur from a clear
+            pass
         # Configure any profiles for this host
         self.profile_manager.set_profile(host)
 
@@ -306,6 +317,7 @@ class Job:
 
         for iter in range(1, int(self.iters)+1):
             ofname_suffix = f"{dst}:{teststr}:{iter}"
+            log.info(f"Testing to {dst} using \"{cmd}\", iter {iter}")
             self.subrun(dst, cmd, iter, ofname_suffix)
 
     def run(self):
@@ -323,7 +335,6 @@ class Job:
 
             # format src command
             cmd = self.src_cmd.format(dst=dst)
-            log.info(f"Testing to {dst} using \"{cmd}\"")
 
             # first ping the host to make sure its up
             png = f'ping -W 5 -c 2 {dst} > /dev/null'
@@ -334,8 +345,13 @@ class Job:
 
             # XXX: need a generalize method to expand sweep options and collect md for each
             for pace in self.pacing:
-                self.tc.clear_pacing(self.nic)
-                self.tc.set_pacing(self.nic, dst, pace)
+                try:
+                    self.tc.clear_pacing(self.nic)
+                    self.tc.set_pacing(self.nic, dst, pace)
+                except Exception as e:
+                    log.error(f"Could not set pacing: {e}")
+                    continue
+                log.info(f"Set pacing to {pace}")
                 self._run_iters(dst, cmd, f"pacing:{pace}")
                 # export a child jobmeta for each new "job" defined by a sweep parameter
                 self._export_md(item, {"pacing": pace})
