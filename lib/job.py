@@ -320,7 +320,7 @@ class Job:
             if self.tcptrace:
                 ofname = f"tcpdump:{ofname_suffix}"
                 try:
-                    launch_tcptrace(ofname, self.outdir, dst, self.archive, self.iter_uuids[iter-1])
+                    launch_tcptrace(ofname, self.outdir, dst, iter, self.archive, self.iter_uuids[iter-1])
                 except Exception as e:
                     log.error(f"Failed to collect tcptrace stats for {dst}: {e}")
 
