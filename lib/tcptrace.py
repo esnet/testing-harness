@@ -34,7 +34,8 @@ def send_ampq(data, archive=None):
 
 def launch_tcptrace(fname, outdir, host, archive=None, parent_job=None):
     infile = f"{outdir}/{fname}"
-    tcptrace_cmd = f"/usr/bin/tcptrace -Slr --output_dir={outdir} --output_prefix={host}. {infile}"
+    ofname = os.path.join(self.outdir, f"tcptrace:{dst}:{iter}.out") # capture output of tcptrace command in a file too
+    tcptrace_cmd = f"/usr/bin/tcptrace -Slr --output_dir={outdir} --output_prefix={host}. {infile}  > {ofname}  2>&1"
     log.debug(f"calling {tcptrace_cmd}")
     proc = run(tcptrace_cmd)
     outs, errs = proc.communicate()
