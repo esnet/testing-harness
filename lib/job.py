@@ -21,8 +21,9 @@ from lib.ampq import AMPQSender
 from lib.profile import ProfileManager, TrafficController
 
 
-loopbacks = ['localhost', '127.0.0.1', '::1']
+loopbacks = ["localhost", "127.0.0.1", "::1"]
 csv_host_opts = ["hostname", "alias", "profile"]
+default_opts = ["profile-control-url", "traffic-control-url"]
 log = logging.getLogger("harness")
 
 comment_pattern = re.compile(r'\s*#.*$')
@@ -45,7 +46,7 @@ def skip_comments(lines):
 
 
 class Job:
-    def __init__(self, name, cfg, outdir, hostlist, nic, archive):
+    def __init__(self, name, cfg, defaults, outdir, hostlist, nic, archive):
         self.uuid = str(uuid.uuid4())
         self.name = name
         self.conf = cfg
@@ -83,11 +84,19 @@ class Job:
         self.profile = cfg.get('profile', None)
         self.profile_control_url = cfg.get('profile-control-url', None)
         self.traffic_control_url = cfg.get('traffic-control-url', None)
-        self.profile_manager = ProfileManager(self.profile_file, self.profile_control_url)
-        self.tc = TrafficController(self.traffic_control_url)
         self.nic = nic
         self.archive = archive
         self.vector_element = 0
+
+        # support a "default" config section
+        if defaults:
+            for d in default_opts:
+                if not getattr(self, d.replace("-", "_")):
+                    setattr(self, d.replace("-", "_"), defaults.get(d, None))
+
+        # Instantiate manager classes
+        self.profile_manager = ProfileManager(self.profile_file, self.profile_control_url)
+        self.tc = TrafficController(self.traffic_control_url)
 
         if self.pacing and not self.nic:
             raise Exception("Invalid job options: selecting pacing requires interface specification, see harness options")

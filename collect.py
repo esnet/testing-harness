@@ -25,6 +25,7 @@ JOB_TYPE_MAP = {
 class TestingDaemon:
     def __init__(self, conf):
         self.conf = conf
+        self.defaults = None
         self.log_file = conf['log_file']
         self.hostlist = conf['hostlist']
         self.outdir = conf['outdir']
@@ -70,12 +71,15 @@ class TestingDaemon:
         log.debug(f"Job list {sections}")
 
         for s in sections:
+            if s == "default":
+                self.defaults = parser[s]
+                continue
             try:
                 typ = parser[s]['type'].lower()
                 jclass = JOB_TYPE_MAP.get(typ, Job)
-                job = jclass(s, parser[s], self.outdir,
-                             self.hostlist, self.nic,
-                             self.archive)
+                job = jclass(s, parser[s], self.defaults,
+                             self.outdir, self.hostlist,
+                             self.nic, self.archive)
                 self.jobs.append(job)
             except Exception as e:
                 log.error(f"Could not create job from config \"{s}\": {e}")
