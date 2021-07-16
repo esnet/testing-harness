@@ -355,7 +355,12 @@ class Job:
             # XXX: need a generalize method to expand sweep options and collect md for each
             for pace in self.pacing:
                 try:
+                    # allow clear pacing to fail
                     self.tc.clear_pacing(self.nic)
+                except:
+                    pass
+                try:
+                    # but not set pacing
                     self.tc.set_pacing(self.nic, dst, pace)
                 except Exception as e:
                     log.error(f"Could not set pacing: {e}")
