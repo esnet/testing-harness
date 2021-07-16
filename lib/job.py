@@ -185,7 +185,6 @@ class Job:
 
         # TODO: clean up this pacing stuff
         if self.pacing :
-            md["pacing"] = self.pacing
             if not self.nic :
                 log.error("Error: must specify NIC if using pacing option")
                 sys.exit(-1)
@@ -254,6 +253,8 @@ class Job:
                 log.debug(f"got NIC speed: {nic_speed}")
                 md["MTU"] = mtu
                 md["NIC_speed"] = nic_speed
+                if self.pacing :
+                    md["pacing"] = self.pacing
             return md
 
         if host:
