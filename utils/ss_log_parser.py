@@ -153,6 +153,8 @@ def read_file():
                     flow_data['bytes_acked'] = int(item[item.rfind(':') + 1:])
                 elif item.startswith('retrans:'):
                     flow_data['retrans'] = int(item[item.rfind('/') + 1:])
+                elif item.startswith('reordering:'):
+                    flow_data['reordering'] = int(item[item.rfind(':') + 1:])
                 elif item.startswith('data_segs_out:'):
                     flow_data['data_segs_out'] = int(item[item.rfind(':') + 1:])
                 elif item.startswith('rtt:'):
@@ -224,9 +226,10 @@ def compute_summary_info (f, all_data):
     cc = {}  # congestion control per port
     last_data_segs_out = {}  # last data_segs_out per port
     last_retrans =       {}  # last retransmitted packet count per port
+    last_reorder =       {}  # last reorder packet count per port
     stream_info = {}      # summary info to convert to JSON object
     total_bytes = [0] * 65000  # init to 0 for any possible port #; probably a better way to do this....
-    i = total_retrans = bbr2_retrans = cubic_retrans = bbr_retrans = cubic_data_segs = bbr2_data_segs = bbr_data_segs = tot_bytes = 0
+    i = total_retrans = bbr2_retrans = cubic_retrans = bbr_retrans = cubic_data_segs = bbr2_data_segs = bbr_data_segs = tot_bytes = cubic_reorder = bbr2_reorder = bbr_reorder = 0
     start_time = 0.0
 
     for t in sorted(all_data.keys()):
@@ -242,6 +245,7 @@ def compute_summary_info (f, all_data):
             ldebug('port %d last_data_segs_out=%s' %
                   (port1, last_data_segs_out[port1]), debug)
             last_retrans[port1] = flow_data.get('retrans', 0)
+            last_reorder[port1] = flow_data.get('reordering', 0)
 
             # this not useful  -blt
             #bytes =  flow_data.get('delivered', 0)
@@ -252,13 +256,13 @@ def compute_summary_info (f, all_data):
             ##    total_bytes[port1] += bytes
             #tot_bytes += bytes # total for all streams
 
-            ldebug('port %d last_retrans=%d' % (port1, last_retrans[port1]), debug)
+            ldebug('port %d last_retrans=%d last_reorder=%d' % (port1, last_retrans[port1], last_reorder[port1]), debug)
             #ldebug('loop cnt: %d, bytes = %d, tot_bytes = %d ' %(i,bytes,tot_bytes), debug)
             i += 1
 
     end_time = flow_data.get('time')
     total_time = end_time - start_time
-    total_data_segs_out = 0
+    total_data_segs_out = total_reorder = 0
     num_streams = len(last_data_segs_out)  # note that for iperf3 there will also be a control stream
     streams = []
     i = 0
@@ -278,19 +282,24 @@ def compute_summary_info (f, all_data):
             num_streams -= 1   # dont count control stream
         
         total_retrans += last_retrans[port1]
+        total_reorder += last_reorder[port1]
         total_data_segs_out += last_data_segs_out[port1]
         if cc[port1] == "bbr2":
              bbr2_retrans += last_retrans[port1]
+             bbr2_reorder += last_reorder[port1]
              bbr2_data_segs += last_data_segs_out[port1]
         elif cc[port1] == "bbr":
              bbr_retrans += last_retrans[port1]
+             bbr_reorder += last_reorder[port1]
              bbr_data_segs += last_data_segs_out[port1]
         else:  # XXX: Assumes cubic if not bbr
              cubic_retrans += last_retrans[port1]
+             cubic_reorder += last_reorder[port1]
              cubic_data_segs += last_data_segs_out[port1]
         #print('last_retrans: %d, last_data_segs_out: %d' % (last_retrans[port1], last_data_segs_out[port1]) )
         #print('bbr2_data_segs: %d, cubic_data_segs: %d, bbr_data_segs: %d' % (bbr2_data_segs, cubic_data_segs, bbr_data_segs) )
         #print('bbr2_retrans: %d, bbr_retrans: %d, cubic_retrans: %d' % (bbr2_retrans, bbr_retrans, cubic_retrans) )
+        #print('bbr2_reorder: %d, bbr_reorder: %d, cubic_reorder: %d' % (bbr2_reorder, bbr_reorder, cubic_reorder) )
 
         i += 1
 
@@ -316,7 +325,8 @@ def compute_summary_info (f, all_data):
     cubic_retrans_rate = f"{cubic_retrans_rate:.8f}"  # to make sure not in scientific notation
     bbr2_retrans_rate = f"{bbr2_retrans_rate:.8f}"  # to make sure not in scientific notation
     bbr_retrans_rate = f"{bbr_retrans_rate:.8f}"  # to make sure not in scientific notation
-    #print ('Total data segs: %d ; Total Retransmit rate: %s ; cubic retrans: %s ; bbr2 retrans: %s ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time ))
+    print ('Total data segs: %d ; Total Retransmit rate: %s ; cubic retrans: %s ; bbr2 retrans: %s ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time ))
+    print('Packet reordering counters: bbr2: %d, bbr: %d, cubic: %d' % (bbr2_reorder, bbr_reorder, cubic_reorder) )
 
     # add to dict
     stream_info['streams'] = streams
@@ -329,6 +339,9 @@ def compute_summary_info (f, all_data):
     stream_info['bbr2_retrans_rate'] = bbr2_retrans_rate
     stream_info['bbr_data_segs'] = bbr_data_segs
     stream_info['bbr_retrans_rate'] = bbr_retrans_rate
+    stream_info['cubic_reordering'] = cubic_reorder
+    stream_info['bbr2_reordering'] = bbr2_reorder
+    stream_info['bbr_reordering'] = bbr_reorder
 
     # also compute median srtt for all srtt samples we took from periodic ss dumps.
     rtts = []
