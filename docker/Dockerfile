@@ -2,9 +2,9 @@
 
 # Build in temporary image
 FROM perfsonar/testpoint:latest AS build
+WORKDIR /src
 
 ARG IP_RT2_VER=5.8.0
-WORKDIR /src
 
 RUN yum -y install git wget
 RUN yum -y groupinstall "Development tools"
@@ -25,15 +25,19 @@ RUN cd iperf && ./configure --enable-static --disable-shared && make -j4
 FROM perfsonar/testpoint:latest
 WORKDIR /src
 
-RUN mkdir -p src && yum -y install git wget tcsh
+RUN yum -y install git wget tcsh
 
 # Move over binaries and configuratioon from build image
 COPY --from=build /usr/local/ /usr/local/
 COPY --from=build /src/iperf/src/iperf3 /usr/bin/iperf3-cc-hack
+
+# Create a symlink iperf3-dist for clarity
+RUN ln -s /usr/bin/iperf3 /usr/bin/iperf3-dist
 
 # Fix problem running tcpdump in priviledged container
 RUN mv /usr/sbin/tcpdump /usr/bin/tcpdump; ln -s /usr/bin/tcpdump /usr/sbin/tcpdump
 
 # Get and configure testing harness
 RUN git clone https://github.com/esnet/testing-harness.git
+RUN cd testing-harness && pip3 install .
 RUN ln -s /src/testing-harness/ /harness
