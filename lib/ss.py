@@ -18,8 +18,7 @@ SS_INTERVAL_SECONDS = 0.5  # gather 'ss' stats each X seconds
 
 
 def run(cmd, verbose=True):
-    if verbose:
-        print(f"running: {cmd}")
+    #log.debug(f"running: {cmd}")
     status = os.system(cmd)
     if status != 0:
         sys.stderr.write(f"error {status} executing: {cmd}")
