@@ -35,6 +35,12 @@ from sklearn import preprocessing
 from sklearn.preprocessing import MultiLabelBinarizer
 
 
+try:
+    os.makedirs('checkpoint')
+except OSError as e:
+    if e.errno != errno.EEXIST:
+        raise
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Found {device} available.")
 rootdir = os.getcwd()
@@ -213,7 +219,7 @@ def main():
 
     parser.add_argument('-p', '--phase', default="test", type=str,
                         help='Training and Testing Phase. {train/test}')
-    parser.add_argument('--infile', default="../data/statistics-5.csv", type=str,
+    parser.add_argument('--infile', default="data/statistics-5.csv", type=str,
                         help='CSV file used for training the model.')
 
     parser.add_argument('-e', '--epoch', default=300, type=int,
@@ -328,7 +334,7 @@ def main():
             print(f"{epoch+0:03}/{EPOCH}", f"{epoch_loss:.4f}", f"{acc:.4f}", sep=' '*10, end="\n")
 
             dt = time.strftime("%Y_%m_%d-%H_%M_%S")
-            fn = "../checkpoint/" + str(dt) + str("-") + str(epoch) + "_ckpt.pt"
+            fn = "checkpoint/" + str(dt) + str("-") + str(epoch) + "_ckpt.pt"
 
             info_dict = {
                 'epoch' : epoch,
