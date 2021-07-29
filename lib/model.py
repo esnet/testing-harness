@@ -380,6 +380,7 @@ def main():
             inputSample, groundtruth = testdata[100]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
+            print(f"Normalized Input Sample : {inputSample}")
             print(f"Ground-truth pacing rate: {groundtruth.item()}\nPredicted pacing rate: {pacing}\n")
         except:
             # DO THE TRAINING
