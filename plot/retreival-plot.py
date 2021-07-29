@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 
 
 parser = argparse.ArgumentParser(description='Testpoint Statistics')
-parser.add_argument('-P', '--path', default="../data/statistics-5.csv", type=str,
+parser.add_argument('-P', '--path', default="data/statistics-5.csv", type=str,
                     help='Enter the complete path of the CSV file')
 parser.add_argument('-O', '--output', default="output", type=str,
                     help='Enter the output folder path for plotting')                    
