@@ -96,7 +96,7 @@ class GETTER:
                                                  size=total_docs,
                                                 )
             bbrmon_pscheduler_documents = [docs for docs in bbrmon_pscheduler_result['hits']['hits']]
-            
+
             for bbrmondoc in range(len(bbrmon_pscheduler_documents)):
             # ---------------------
             # For each job/document
@@ -323,9 +323,9 @@ def main(verbose=False):
     parser.add_argument('-o','--type', default="iperf3", type=str,
                         help='Chose option for pulling type of index details {iperf3, bbrmon}')
     args = parser.parse_args()
+    print("")
     for arg in vars(args):
-        print (f"{arg} {getattr(args, arg) : ^25}")
-        logging.info (f"{arg} {getattr(args, arg)}")
+        print ("%-9s: %s"%(arg,getattr(args, arg)))
 
     get = GETTER(args.term)
 
@@ -398,13 +398,12 @@ def main(verbose=False):
         index_response = get.getIndexDetails(iperf3, jobmeta, iperf3_column_list, interval=False, total_docs=10000)
 
     print(f"Records: {clr.G}{len(index_response)}{clr.E}")
+
     # --------------------------------------------------------------------------
     # STEP 3. Writer to write the dataframe into a csv file
     # takes care of the naming, if ran the script multiple times
     # --------------------------------------------------------------------------
-    # files = os.listdir("data")
-    
-    files = glob.glob("data/*.csv") # Reading all the previously written files
+    files = glob.glob("../data/*.csv") # Reading all the previously written files
     last_filename = files[-1]  # Get the last file name
 
     num = int(last_filename.split("-")[1].split(".")[0]) # Extract the number from the last filename
@@ -415,7 +414,7 @@ def main(verbose=False):
         filename = args.term[:-1]
 
     try:
-        index_response.to_csv('data/'+str(filename)+'.csv')
+        index_response.to_csv('../data/'+str(filename)+'.csv')
         print (f"{str(filename)}.csv file written!")
         logging.info (f"'{clr.G}{str(filename)}.csv{clr.E}' file written!")
     except:
