@@ -9,26 +9,66 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 log = logging.getLogger("harness")
 
-class NetemHandler(object):
-    DEF_BASE_URL = "https://localhost:5000/api/dtnaas/agent/tc"
+DEF_TRAFFIC_URL = "https://localhost:5000/api/dtnaas/agent/tc"
+DEF_PROFILE_URL = "https://localhost:5000/api/dtnaas/agent/tc"
 
-    def __init__(self, url=DEF_BASE_URL, user="admin", passwd="admin"):
+class TrafficController(object):
+    def __init__(self, url=DEF_TRAFFIC_URL, user="admin", passwd="admin"):
         self._url = url
         self._user = user
         self._passwd = passwd
 
     def _call(self, fn, url, data=None):
         hdrs = {"Content-type": "application/json"}
-        try:
-            res = fn(url,
-                     data=data,
-                     auth=(self._user, self._passwd),
-                     headers=hdrs,
-                     verify=False)
-            log.debug(f"Netem agent response: {res.status_code} ({res.text.strip()})")
-        except Exception as e:
-            log.error(f"Could not set NetemHandler profile: {e}")
-            return
+        res = fn(url,
+                 data=data,
+                 auth=(self._user, self._passwd),
+                 headers=hdrs,
+                 verify=False)
+        if res.status_code != 200:
+            raise Exception(f"Traffic Control agent error: {res.status_code} ({res.text.strip()})")
+
+    def set_pacing(self, iface, dst, rate):
+        iface_parts = iface.split(".")
+        tagged = False
+        if len(iface_parts) > 1:
+            tagged = True
+        ep = f"{self._url}/pacing"
+        d = {"interface": iface_parts[0],
+             "ip": dst,
+             "maxrate": rate,
+             "tagged": tagged
+             }
+        data = json.dumps(d)
+        log.debug(f"Setting : {data}")
+        self._call(requests.post, ep, data)
+
+    def update_pacing(self, iface, dst, maxrate):
+        pass
+
+    def clear_pacing(self, iface):
+        iface_parts = iface.split(".")
+        ep = f"{self._url}/pacing"
+        d = {"interface": iface_parts[0]}
+        data = json.dumps(d)
+        log.debug(f"Setting : {data}")
+        self._call(requests.delete, ep, data)
+
+class NetemHandler(object):
+    def __init__(self, url=DEF_PROFILE_URL, user="admin", passwd="admin"):
+        self._url = url
+        self._user = user
+        self._passwd = passwd
+
+    def _call(self, fn, url, data=None):
+        hdrs = {"Content-type": "application/json"}
+        res = fn(url,
+                 data=data,
+                 auth=(self._user, self._passwd),
+                 headers=hdrs,
+                 verify=False)
+        if res.status_code != 200:
+            raise Exception(f"Netem agent error: {res.status_code} ({res.text.strip()})")
 
     def run(self, profile):
         ep = f"{self._url}/netem"
@@ -43,11 +83,11 @@ class NetemHandler(object):
         self._call(requests.delete, ep, data)
 
 class ProfileManager():
-    def __init__(self, pfile):
+    def __init__(self, pfile, url=DEF_PROFILE_URL):
         self._profiles = dict()
         self._handlers = dict()
-        self._handlers["netem"] = NetemHandler()
-        
+        self._handlers["netem"] = NetemHandler(url)
+
         if not pfile:
             return
 
