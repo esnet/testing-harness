@@ -230,7 +230,7 @@ def main():
                         help='Learning rate for the optimizer')
     parser.add_argument('-i', '--interval', default=25, type=int,
                         help='Print statement interval')
-    parser.add_argument('-s', '--save', action='store_true',
+    parser.add_argument('-s', '--save', action='store_false',
                         help='To save the checkpoints of the training model')
 
     args = parser.parse_args()
