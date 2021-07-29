@@ -2,7 +2,7 @@
 .DS_Store
 
 # Trained models
-*.pt
+# *.pt
 
 # Code Editor
 .vscode

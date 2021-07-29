@@ -46,6 +46,21 @@ except OSError as e:
     if e.errno != errno.EEXIST:
         raise
 
+
+class clr:
+    """
+    Defining colors for the print syntax coloring
+    """
+    H   = '\033[35m' # Header
+    B   = '\033[94m' # Blue
+    G   = '\033[36m' # Green
+    W   = '\033[93m' # Warning
+    F   = '\033[91m' # Fail
+    E   = '\033[0m'  # End
+    BD  = '\033[1m'  # Bold
+    UL  = '\033[4m'  # Underline
+
+
 class SEEDEVERYTHING:
     # random weight initialization
     def __init__(self):
@@ -59,6 +74,77 @@ class SEEDEVERYTHING:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         print("Seeded everything.")
+
+
+class DATA:
+    """
+    Providing all the preprocessing techniques such as;
+    - Data Loading,
+    - Data Cleaning,
+    - One-Hot Encoding,
+    - Data Normalization
+    """
+    def __init__(self, infile):
+        self.infile = infile
+
+    def _df_load_and_clean(self, infile):
+        # data loading and preprocessing
+        dataPath = self.infile
+        df = pd.read_csv(dataPath)
+
+        # Dropping columns that are not required at the moment
+        df = df.drop(columns=['Unnamed: 0','UUID','HOSTNAME','TIMESTAMP',
+                              'THROUGHPUT (Receiver)','LATENCY (mean)',
+                              'CONGESTION (Receiver)','BYTES (Receiver)'])
+        return df
+
+    def _preprocessing(self, df):
+        print("\nStarted preprocessing ...")
+        # Spliting 1gbps -> 1, gbps
+        pacing = df['PACING'].values
+        for i, p in enumerate(pacing):
+            v, _ = p.split("gbit")
+            pacing[i] = float(v)
+        df['PACING'] = pacing
+
+        # Dropping rows with pacing rate 10.5, glitch in the training data
+        df.drop( df[ df['PACING'] == 10.5 ].index, inplace=True)
+        # Supervised training approach needs total number of classes for classification task
+        num_of_classes = len(df['PACING'].unique())
+
+        print(f"Using the following features:\n{clr.G}{df.columns.values}{clr.E}\n")
+
+        """
+        Transform between iterable of iterables and a multilabel format.
+        Although a list of sets or tuples is a very intuitive format for
+        multilabel data, it is unwieldy to process. This transformer converts
+        between this intuitive format and the supported multilabel format
+        """
+        mlb = MultiLabelBinarizer(sparse_output=True)
+        alias_df = df.join(pd.DataFrame.sparse.from_spmatrix(mlb.fit_transform(df.pop('ALIAS')),
+                                                            index=df.index,
+                                                            columns=mlb.classes_))
+
+        df_ = alias_df.join(pd.DataFrame.sparse.from_spmatrix(mlb.fit_transform(alias_df.pop('CONGESTION (Sender)')),
+                                                             index=alias_df.index,
+                                                             columns=mlb.classes_),
+                            how = 'left', lsuffix='left', rsuffix='right')
+
+        X = df_[df_.columns.values].values
+        y = df_['PACING'].values
+        y = y.astype('float')
+
+        """
+        Normalization: This estimator scales and translates each feature individually 
+        such that it is in the given range on the training set
+        """
+        minmax_scale = preprocessing.MinMaxScaler().fit(df_[df_.columns.values])
+        df_minmax = minmax_scale.transform(df_[df_.columns.values])
+
+        final_df = pd.DataFrame(df_minmax, columns=df_.columns.values)
+        X = final_df[df_.columns.values].values
+
+        return X, y, num_of_classes
 
 
 class RECEIVEFEATURES:
@@ -213,11 +299,17 @@ class PACINGCLASSIFIER (nn.Module):
             # converting the sample to tensor array
             ukn = np.array([inputSample], dtype=np.float32)
             sample = torch.tensor(ukn, dtype=torch.float32).to(device)
+
+        elif len(inputSample)!=inputFea and isinstance(inputSample, list):
+            # Needs pre-processing similar to model training
+
+            # converting the sample to tensor array
+            ukn = np.array([inputSample], dtype=np.float32)
+            sample = torch.tensor(ukn, dtype=torch.float32).to(device)
         
         elif isinstance(inputSample, torch.Tensor):
+            # Using a test data sample for Demo
             sample = inputSample.float().unsqueeze_(0)
-        
-        # Do the same pre-processing as model training
 
 
         # Inference stage
@@ -225,73 +317,6 @@ class PACINGCLASSIFIER (nn.Module):
         with torch.no_grad():
             pred = torch.max(model(sample), 1)[1]
         return pred.item()
-
-class DATA:
-    """
-    Providing all the preprocessing techniques such as;
-    - Data Loading,
-    - Data Cleaning,
-    - One-Hot Encoding,
-    - Data Normalization
-    """
-    def __init__(self, infile):
-        self.infile = infile
-
-    def _df_load_and_clean(self, infile):
-        # data loading and preprocessing
-        dataPath = self.infile
-        df = pd.read_csv(dataPath)
-
-        # Dropping columns that are not required at the moment
-        df = df.drop(columns=['Unnamed: 0','UUID','HOSTNAME','TIMESTAMP',
-                              'THROUGHPUT (Receiver)','LATENCY (mean)',
-                              'CONGESTION (Receiver)','BYTES (Receiver)'])
-        return df
-
-    def _preprocessing(self, df):
-        # Spliting 1gbps -> 1, gbps
-        pacing = df['PACING'].values
-        for i, p in enumerate(pacing):
-            v, _ = p.split("gbit")
-            pacing[i] = float(v)
-        df['PACING'] = pacing
-
-        # Dropping rows with pacing rate 10.5, glitch in the training data
-        df.drop( df[ df['PACING'] == 10.5 ].index, inplace=True)
-        # Supervised training approach needs total number of classes for classification task
-        num_of_classes = len(df['PACING'].unique())
-
-        """
-        Transform between iterable of iterables and a multilabel format.
-        Although a list of sets or tuples is a very intuitive format for
-        multilabel data, it is unwieldy to process. This transformer converts
-        between this intuitive format and the supported multilabel format
-        """
-        mlb = MultiLabelBinarizer(sparse_output=True)
-        alias_df = df.join(pd.DataFrame.sparse.from_spmatrix(mlb.fit_transform(df.pop('ALIAS')),
-                                                            index=df.index,
-                                                            columns=mlb.classes_))
-
-        df_ = alias_df.join(pd.DataFrame.sparse.from_spmatrix(mlb.fit_transform(alias_df.pop('CONGESTION (Sender)')),
-                                                             index=alias_df.index,
-                                                             columns=mlb.classes_),
-                            how = 'left', lsuffix='left', rsuffix='right')
-
-        X = df_[df_.columns.values].values
-        y = df_['PACING'].values
-        y = y.astype('float')
-
-        """
-        Normalization: This estimator scales and translates each feature individually 
-        such that it is in the given range on the training set
-        """
-        minmax_scale = preprocessing.MinMaxScaler().fit(df_[df_.columns.values])
-        df_minmax = minmax_scale.transform(df_[df_.columns.values])
-
-        final_df = pd.DataFrame(df_minmax, columns=df_.columns.values)
-        X = final_df[df_.columns.values].values
-
-        return X, y, num_of_classes
 
 
 def main():
@@ -380,8 +405,8 @@ def main():
             inputSample, groundtruth = testdata[100]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
-            print(f"Normalized Input Sample : {inputSample}")
-            print(f"Ground-truth pacing rate: {groundtruth.item()}\nPredicted pacing rate: {pacing}\n")
+            print(f"Normalized Input Sample :\n{clr.G}{inputSample}{clr.E}")
+            print(f"Groundtruth pacing rate: {clr.G}{groundtruth.item()}{clr.E}\nPredicted pacing rate: {clr.G}{pacing}{clr.E}\n")
         except:
             # DO THE TRAINING
             ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction)          
@@ -395,7 +420,8 @@ def main():
         # inputSample  = bufferReader._read_buffer()
         inputSample, groundtruth = testdata[100]
         pacing = model._test(inferenceModel, inputSample, inputFea)
-        print(f"Ground-truth pacing rate: {groundtruth.item()}\nPredicted pacing rate: {pacing}\n")
+        print(f"Normalized Input Sample :\n{clr.G}{inputSample}{clr.E}")
+        print(f"Groundtruth pacing rate: {clr.G}{groundtruth.item()}{clr.E}\nPredicted pacing rate:  {clr.G}{pacing}{clr.E}\n")
 
 
 if __name__ == "__main__":
