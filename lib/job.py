@@ -352,6 +352,9 @@ class Job:
                 log.info(f"Error: ping to {dst} failed, error code: \"{status}\"")
                 continue
 
+            if self.pacing=='dynamic' or 'dynamic' in self.pacing:
+                # Let the model predict the pacing time for us
+                
             # XXX: need a generalize method to expand sweep options and collect md for each
             for pace in self.pacing:
                 try:

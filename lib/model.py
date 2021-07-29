@@ -428,7 +428,7 @@ def main():
         inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
         bufferReader = RECEIVEFEATURES()
         # inputSample  = bufferReader._read_buffer()
-        inputSample, groundtruth = testdata[100]
+        inputSample, groundtruth = testdata[101]
         pacing = model._test(inferenceModel, inputSample, inputFea)
         print(f"Normalized Input Sample :\n{clr.G}{inputSample}{clr.E}")
         print(f"Groundtruth pacing rate: {clr.G}{groundtruth.item()}{clr.E}\nPredicted pacing rate:  {clr.G}{pacing}{clr.E}\n")
