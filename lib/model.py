@@ -4,6 +4,7 @@ from __future__ import absolute_import, print_function
 import os
 import sys
 import time
+import errno
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -35,16 +36,15 @@ from sklearn import preprocessing
 from sklearn.preprocessing import MultiLabelBinarizer
 
 
-try:
-    os.makedirs('checkpoint')
-except OSError as e:
-    if e.errno != errno.EEXIST:
-        raise
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Found {device} available.")
 rootdir = os.getcwd()
 
+try:
+    os.makedirs(os.path.join(rootdir,'checkpoint'))
+except OSError as e:
+    if e.errno != errno.EEXIST:
+        raise
 
 class SEEDEVERYTHING:
     # random weight initialization
@@ -144,6 +144,87 @@ class PACINGCLASSIFIER (nn.Module):
         z = self.fc6(z)  # no activation
         return z
 
+    def _train(self, args, model, trainloader, testloader, optimizer, scheduler, lossFunction):
+        # Model training on the retrieved statistics.
+        print("")
+        print("Epoch", " Loss", "  Acc", sep=' '*11, end="\n")
+        EPOCH = args.epoch
+        trainloss = []
+        
+        for epoch in range(0, EPOCH):
+            model.train()
+            torch.manual_seed(epoch+1)                      # recovery reproducibility
+            epoch_loss = 0                                  # for one full epoch
+
+            for (batch_idx, batch) in enumerate(trainloader):
+                (xs, ys) = batch                            # (predictors, targets)
+                xs, ys = xs.float(), ys.float()
+                optimizer.zero_grad()                       # prepare gradients
+
+                output = model(xs)                          # predicted pacing rate
+                loss = lossFunction(output, ys.long())      # avg per item in batch
+
+                epoch_loss += loss.item()                   # accumulate averages
+                loss.backward()                             # compute gradients
+                optimizer.step()                            # update weights
+            
+            scheduler.step()
+            trainloss.append(epoch_loss)
+            if epoch % args.interval == 0:
+
+                model.eval()                                # evaluation phase on every epoch
+                correct, acc = 0, 0
+                with torch.no_grad():
+                    for xs, ys in testloader:
+                        xs, ys = xs.float(), ys.long()
+                        pred = torch.max(model(xs), 1)[1]
+                        correct += (pred == ys).sum().item()
+                    acc = (100 * float(correct / len(testloader.dataset)) )
+
+                print(f"{epoch+0:03}/{EPOCH}", f"{epoch_loss:.4f}", f"{acc:.4f}", sep=' '*10, end="\n")
+
+                dt = time.strftime("%Y_%m_%d-%H_%M_%S")
+                fn = "checkpoint/" + str(dt) + str("-") + str(epoch) + "_ckpt.pt"
+
+                info_dict = {
+                    'epoch' : epoch,
+                    'model_state' : model.state_dict(),
+                    'optimizer_state' : optimizer.state_dict()
+                }
+                if args.save:
+                    torch.save(info_dict, fn)               # save checkpoint
+
+        torch.save (info_dict, "checkpoint/best.pt")
+        print("\n*************************\nTraining complete\n")
+        return model
+
+    def _loadModel(self, fn, num_of_classes, inputFea):
+        # Load a pre-trained model from a given path
+        model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
+        modelPath = torch.load(fn)
+        model.load_state_dict(modelPath['model_state'])
+        model.to(device)
+        print("\n*************************\nPre-trained model loaded\n*************************\n")
+        return model
+
+    def _test(self, model, inputSample, inputFea):
+
+        if len(inputSample)==inputFea and isinstance(inputSample, list):
+            # converting the sample to tensor array
+            ukn = np.array([inputSample], dtype=np.float32)
+            sample = torch.tensor(ukn, dtype=torch.float32).to(device)
+        
+        elif isinstance(inputSample, torch.Tensor):
+            sample = inputSample.float().unsqueeze_(0)
+        
+        # Do the same pre-processing as model training
+
+
+        # Inference stage
+        model.eval()
+        with torch.no_grad():
+            pred = torch.max(model(sample), 1)[1]
+        return pred.item()
 
 class DATA:
     """
@@ -230,7 +311,7 @@ def main():
                         help='Learning rate for the optimizer')
     parser.add_argument('-i', '--interval', default=25, type=int,
                         help='Print statement interval')
-    parser.add_argument('-s', '--save', action='store_false',
+    parser.add_argument('-s', '--save', action='store_true',
                         help='To save the checkpoints of the training model')
 
     args = parser.parse_args()
@@ -241,17 +322,6 @@ def main():
     print("")
     seeder = SEEDEVERYTHING()
     seeder._weight_init_()
-
-    ###############
-    # if args.phase=="test":
-    #     model.eval()
-    #     # Get the features from iperf3 prob test
-    #     inputFea = []
-
-    # elif args.phase=="train":
-    #     # DO THE TRAINING
-    #     model.train()
-    ###############
 
     # Preprocessing
     prep = DATA(args.infile)
@@ -298,53 +368,34 @@ def main():
                                                     milestones=[200, 350],
                                                     gamma=0.1)
 
-    print("Epoch", " Loss", "  Acc", sep=' '*11, end="\n")
-    EPOCH = args.epoch
-    trainloss = []
-    for epoch in range(0, EPOCH):
-        model.train()
-        torch.manual_seed(epoch+1)                      # recovery reproducibility
-        epoch_loss = 0                                  # for one full epoch
+    fn = os.path.join(rootdir,"checkpoint/best.pt")
+    if args.phase=="test" and os.path.exists(fn):
+        try:
+            # Get the features from iperf3 prob test
+            # inputFea = []
+            inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
 
-        for (batch_idx, batch) in enumerate(trainloader):
-            (xs, ys) = batch                            # (predictors, targets)
-            xs, ys = xs.float(), ys.float()
-            optimizer.zero_grad()                       # prepare gradients
+            bufferReader = RECEIVEFEATURES()
+            # inputSample  = bufferReader._read_buffer()
+            inputSample, groundtruth = testdata[100]
 
-            output = model(xs)                          # predicted pacing rate
-            loss = lossFunction(output, ys.long())      # avg per item in batch
+            pacing = model._test(inferenceModel, inputSample, inputFea)
+            print(f"Ground-truth pacing rate: {groundtruth.item()}\nPredicted pacing rate: {pacing}\n")
+        except:
+            # DO THE TRAINING
+            ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction)          
 
-            epoch_loss += loss.item()                   # accumulate averages
-            loss.backward()                             # compute gradients
-            optimizer.step()                            # update weights
-        
-        scheduler.step()
-        trainloss.append(epoch_loss)
-        if epoch % args.interval == 0:
+    elif args.phase=="train":
+        # DO THE TRAINING
+        ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction)
 
-            model.eval()                                # evaluation phase on every epoch
-            correct, acc = 0, 0
-            with torch.no_grad():
-                for xs, ys in testloader:
-                    xs, ys = xs.float(), ys.long()
-                    pred = torch.max(model(xs), 1)[1]
-                    correct += (pred == ys).sum().item()
-                acc = (100 * float(correct / len(testdata)) )
+        inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
+        bufferReader = RECEIVEFEATURES()
+        # inputSample  = bufferReader._read_buffer()
+        inputSample, groundtruth = testdata[100]
+        pacing = model._test(inferenceModel, inputSample, inputFea)
+        print(f"Ground-truth pacing rate: {groundtruth.item()}\nPredicted pacing rate: {pacing}\n")
 
-            print(f"{epoch+0:03}/{EPOCH}", f"{epoch_loss:.4f}", f"{acc:.4f}", sep=' '*10, end="\n")
-
-            dt = time.strftime("%Y_%m_%d-%H_%M_%S")
-            fn = "checkpoint/" + str(dt) + str("-") + str(epoch) + "_ckpt.pt"
-
-            info_dict = {
-                'epoch' : epoch,
-                'model_state' : model.state_dict(),
-                'optimizer_state' : optimizer.state_dict()
-            }
-            if args.save:
-                torch.save(info_dict, fn)               # save checkpoint
-
-    print("\nDone")
 
 if __name__ == "__main__":
     main()
