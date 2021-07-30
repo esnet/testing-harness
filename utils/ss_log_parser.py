@@ -325,7 +325,10 @@ def compute_summary_info (f, all_data):
     cubic_retrans_rate = f"{cubic_retrans_rate:.8f}"  # to make sure not in scientific notation
     bbr2_retrans_rate = f"{bbr2_retrans_rate:.8f}"  # to make sure not in scientific notation
     bbr_retrans_rate = f"{bbr_retrans_rate:.8f}"  # to make sure not in scientific notation
-    print ('Total data segs: %d ; Total Retransmit rate: %s ; cubic retrans: %s ; bbr2 retrans: %s ; Time: %.1f  ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time ))
+    mss = flow_data.get('mss', 0)
+    throughput = ((total_data_segs_out * mss / total_time ) /  1000000000) * 8 # in Gbps
+    throughput = f"{throughput:.3f}"  # convert to string
+    print ('Total data segs: %d ; Total Retransmit rate: %s ; cubic retrans: %s ; bbr2 retrans: %s ; Time: %.1f Throughput = %s Gbps ' % (total_data_segs_out, total_retrans_rate, cubic_retrans_rate, bbr2_retrans_rate, total_time , throughput))
     print('Packet reordering counters: bbr2: %d, bbr: %d, cubic: %d' % (bbr2_reorder, bbr_reorder, cubic_reorder) )
 
     # add to dict
@@ -342,6 +345,7 @@ def compute_summary_info (f, all_data):
     stream_info['cubic_reordering'] = cubic_reorder
     stream_info['bbr2_reordering'] = bbr2_reorder
     stream_info['bbr_reordering'] = bbr_reorder
+    stream_info['throughput'] = throughput
 
     # also compute median srtt for all srtt samples we took from periodic ss dumps.
     rtts = []
