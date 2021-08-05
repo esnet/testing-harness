@@ -306,7 +306,7 @@ class Job:
         time.sleep(2)
 
         if not ofname:
-            return
+            return proc.stdout.read()
         try:
             f = open(ofname, 'wb')
             if not outs:
@@ -333,17 +333,27 @@ class Job:
         log.info(f"Executing runs for job {self.name} and {self.iters} iterations")
         self._export_md()
 
+        key = 'dynamic'
+
         for item in self.hosts:
             dst = item.get("hostname", None)
+
             # First handle any options for this host
-            try:
-                self._handle_opts(item)
-            except Exception as e:
-                log.error(f"Could not handle host options for {dst}: {e}")
-                continue
+            #try:
+                #self._handle_opts(item)
+            #except Exception as e:
+                #log.error(f"Could not handle host options for {dst}: {e}")
+                #continue
 
             # format src command
             cmd = self.src_cmd.format(dst=dst)
+
+            # ******************************************
+            if key in self.pacing:
+                print("\n\nPacing is set Dynamic\n\n")
+                res = self._run_host_cmd(item, cmd, None, False)
+                print(f"res: {res}\n\n")
+            # ******************************************
 
             # first ping the host to make sure its up
             png = f'ping -W 5 -c 2 {dst} > /dev/null'
@@ -352,8 +362,9 @@ class Job:
                 log.info(f"Error: ping to {dst} failed, error code: \"{status}\"")
                 continue
 
-            if self.pacing=='dynamic' or 'dynamic' in self.pacing:
-                # Let the model predict the pacing time for us
+            # if self.pacing=='dynamic' or 'dynamic' in self.pacing:
+            #     # Let the model predict the pacing time for us
+            #     print("\n\n*****Inside the condition*****\n\n", self.pacing, type(self.pacing))
                 
             # XXX: need a generalize method to expand sweep options and collect md for each
             for pace in self.pacing:
