@@ -1,0 +1,16 @@
+version: '3.7'
+services:
+  agent:
+    image: dtnaas/agent
+    privileged: true
+    expose:
+      - 5000
+    ports:
+      - "5000:5000"
+
+  harness:
+    image: dtnaas/perfsonar-testpoint
+    volumes:
+      - /src/testing-harness:/harness
+    depends_on:
+      - agent
