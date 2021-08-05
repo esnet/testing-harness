@@ -1,6 +1,6 @@
 profiles:
   WAN:
-    interface: enp0s3
+    interface: eth0
     latency: 80ms
     loss: 0.001%
     limit: 10000

@@ -87,6 +87,7 @@ class Job:
         self.nic = nic
         self.archive = archive
         self.vector_element = 0
+        self.sweep_enabled = False
 
         # support a "default" config section
         if defaults:
@@ -105,15 +106,19 @@ class Job:
         abspath = os.path.dirname(os.path.abspath(__file__))
         self.util_path = os.path.join(abspath, "..", "utils")
 
-        if self.lat_sweep and self.limit_sweep :
+        # configure sweep, XXX refactor this
+        if self.lat_sweep and self.limit_sweep:
             log.error ("Error: Can not specify both lat-sweeep and limit-sweep in the same test ")
             sys.exit(-1)
         if self.lat_sweep:
             log.info (f"will test the following latencies: {self.lat_sweep}")
+            self.sweep_enabled = True
         if self.limit_sweep:
             log.info (f"will test the following limits: {self.limit_sweep}")
+            self.sweep_enabled = True
         if self.pacing:
             log.info (f"will test the following pacing rates: {self.pacing}")
+            self.sweep_enabled = True
 
         self.hostname = socket.gethostname()
         self.start_time = datetime.now().strftime('%Y-%m-%d:%H:%M')
@@ -325,9 +330,31 @@ class Job:
         self.iter_uuids = uuids
 
         for iter in range(1, int(self.iters)+1):
-            ofname_suffix = f"{dst}:{teststr}:{iter}"
+            if teststr:
+                ofname_suffix = f"{dst}:{teststr}:{iter}"
+            else:
+                ofname_suffix = f"{dst}:{iter}"
             log.info(f"Testing to {dst} using \"{cmd}\", iter {iter}")
             self.subrun(dst, cmd, iter, ofname_suffix)
+
+    def _run_sweep(self, item, dst, cmd):
+        # XXX: need a generalize method to expand sweep options and collect md for each
+        for pace in self.pacing:
+            try:
+                # allow clear pacing to fail
+                self.tc.clear_pacing(self.nic)
+            except:
+                pass
+            try:
+                # but not set pacing
+                self.tc.set_pacing(self.nic, dst, pace)
+            except Exception as e:
+                log.error(f"Could not set pacing: {e}")
+                continue
+            log.info(f"Set pacing to {pace}")
+            self._run_iters(dst, cmd, f"pacing:{pace}")
+            # export a child jobmeta for each new "job" defined by a sweep parameter
+            self._export_md(item, {"pacing": pace})
 
     def run(self):
         log.info(f"Executing runs for job {self.name} and {self.iters} iterations")
@@ -352,23 +379,11 @@ class Job:
                 log.info(f"Error: ping to {dst} failed, error code: \"{status}\"")
                 continue
 
-            # XXX: need a generalize method to expand sweep options and collect md for each
-            for pace in self.pacing:
-                try:
-                    # allow clear pacing to fail
-                    self.tc.clear_pacing(self.nic)
-                except:
-                    pass
-                try:
-                    # but not set pacing
-                    self.tc.set_pacing(self.nic, dst, pace)
-                except Exception as e:
-                    log.error(f"Could not set pacing: {e}")
-                    continue
-                log.info(f"Set pacing to {pace}")
-                self._run_iters(dst, cmd, f"pacing:{pace}")
-                # export a child jobmeta for each new "job" defined by a sweep parameter
-                self._export_md(item, {"pacing": pace})
+            if self.sweep_enabled:
+                self._run_sweep(item, dst, cmd)
+            else:
+                self._run_iters(dst, cmd, None)
+                self._export_md(item, None)
 
             # reset any profiles that were set as part of option handling
             self.profile_manager.clear_profile(item)
