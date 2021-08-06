@@ -306,6 +306,7 @@ class Job:
         time.sleep(2)
 
         if not ofname:
+            # When host:{HostA,B,...}, cmd: iperf3, ofname: None, stop: False
             return proc.stdout.read()
         try:
             f = open(ofname, 'wb')
@@ -339,11 +340,11 @@ class Job:
             dst = item.get("hostname", None)
 
             # First handle any options for this host
-            #try:
-                #self._handle_opts(item)
-            #except Exception as e:
-                #log.error(f"Could not handle host options for {dst}: {e}")
-                #continue
+            try:
+                self._handle_opts(item)
+            except Exception as e:
+                log.error(f"Could not handle host options for {dst}: {e}")
+                continue
 
             # format src command
             cmd = self.src_cmd.format(dst=dst)
