@@ -306,8 +306,11 @@ class Job:
         time.sleep(2)
 
         if not ofname:
-            # When host:{HostA,B,...}, cmd: iperf3, ofname: None, stop: False
-            return proc.stdout.read()
+            # When host:None, cmd: iperf3, ofname: None, stop: False
+            if not outs:
+                outs = proc.stdout.read()
+            return outs
+
         try:
             f = open(ofname, 'wb')
             if not outs:
@@ -350,10 +353,10 @@ class Job:
             cmd = self.src_cmd.format(dst=dst)
 
             # ******************************************
-            if key in self.pacing:
-                print("\n\nPacing is set Dynamic\n\n")
-                res = self._run_host_cmd(item, cmd, None, False)
-                print(f"res: {res}\n\n")
+            # if key in self.pacing:
+            #     print("\n\nPacing is set Dynamic\n\n")
+            #     res = self._run_host_cmd(None, cmd, None, False)
+            #     print(f"res: {res}\n\n")
             # ******************************************
 
             # first ping the host to make sure its up
@@ -363,10 +366,16 @@ class Job:
                 log.info(f"Error: ping to {dst} failed, error code: \"{status}\"")
                 continue
 
-            # if self.pacing=='dynamic' or 'dynamic' in self.pacing:
-            #     # Let the model predict the pacing time for us
-            #     print("\n\n*****Inside the condition*****\n\n", self.pacing, type(self.pacing))
-                
+            if key in self.pacing:
+                # Let the model predict the pacing time for us
+                print("\nPacing is set Dynamic\n")
+                res = self._run_host_cmd(None, cmd, None, False)
+                try:
+                    harnessInput_dict = json.loads(res)
+                    print(f"{harnessInput_dict}\n")
+                except Exception as e:
+                    print(e)
+
             # XXX: need a generalize method to expand sweep options and collect md for each
             for pace in self.pacing:
                 try:

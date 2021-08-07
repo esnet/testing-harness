@@ -1,24 +1,24 @@
 profiles:
   WAN:
-    interface: enp0s3
+    interface: eth200.200
     latency: 80ms
     loss: 0.001%
     limit: 10000
     rate: 500Mbit
 
   hostA:
-    interface: eth200
+    interface: eth200.200
     latency: 30ms
 
   hostB:
-    interface: eth200
+    interface: eth200.200
     latency: 50ms
     loss: 0.01%
     limit: 20000
     rate: 1Gbit
 
   hostC:
-    interface: eth200
+    interface: eth200.200
     latency: 20ms
     rate: 5Gbit
 
