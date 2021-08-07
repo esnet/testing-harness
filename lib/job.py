@@ -352,13 +352,6 @@ class Job:
             # format src command
             cmd = self.src_cmd.format(dst=dst)
 
-            # ******************************************
-            # if key in self.pacing:
-            #     print("\n\nPacing is set Dynamic\n\n")
-            #     res = self._run_host_cmd(None, cmd, None, False)
-            #     print(f"res: {res}\n\n")
-            # ******************************************
-
             # first ping the host to make sure its up
             png = f'ping -W 5 -c 2 {dst} > /dev/null'
             status = os.system(png)
@@ -368,11 +361,12 @@ class Job:
 
             if key in self.pacing:
                 # Let the model predict the pacing time for us
-                print("\nPacing is set Dynamic\n")
+                print("\nDetected dynamic pacing\n")
                 res = self._run_host_cmd(None, cmd, None, False)
                 try:
                     harnessInput_dict = json.loads(res)
-                    print(f"{harnessInput_dict}\n")
+                    harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
+                    print(f"{harnessInput_frmt_dict}\n")
                 except Exception as e:
                     print(e)
 
