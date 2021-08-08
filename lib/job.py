@@ -361,12 +361,21 @@ class Job:
 
             if key in self.pacing:
                 # Let the model predict the pacing time for us
-                print("\nDetected dynamic pacing\n")
+                print("\nDetected dynamic pacing")
                 res = self._run_host_cmd(None, cmd, None, False)
                 try:
                     harnessInput_dict = json.loads(res)
                     harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
-                    print(f"{harnessInput_frmt_dict}\n")
+                    
+                    throughput = harnessInput_dict['end']['sum_sent']['bits_per_second']
+                    retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
+                    bytes_ = harnessInput_dict['end']['sum_sent']['bytes']
+                    cc_type = harnessInput_dict['end']['sender_tcp_congestion']
+
+                    host = harnessInput_dict['start']['connecting_to']['host']
+                    streams = harnessInput_dict['start']['test_start']['num_streams']
+
+                    print(f"throughput:{throughput}\nretransmits:{retransmits}\nbytes:{bytes_}\ncc_type:{cc_type}\nhost:{host}\nstreams:{streams}")
                 except Exception as e:
                     print(e)
 
