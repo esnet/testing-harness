@@ -392,7 +392,7 @@ class Job:
                     print(f"min_rtt:{min_rtt}\nmax_rtt:{max_rtt}\nmean_rtt:{mean_rtt}")
 
                     bytes_ = harnessInput_dict['end']['sum_sent']['bytes']
-                    print(f"bytes_:{bytes_}")
+                    print(f"bytes_:{bytes_}\n")
 
                     # print(harnessInput_frmt_dict)
                 except Exception as e:
