@@ -377,7 +377,7 @@ def getPacingRate(bufferData, phase='test'):
             print(f"Predicted pacing rate: {clr.G}{pacing}{clr.E}\n")
 
         except Exception as e:
-            print("No pre-trained model found, please train a model first before prediction.")
+            print(f"{clr.F}No pre-trained model found, please train a model first before prediction.{clr.E}")
 
     return pacing
 
