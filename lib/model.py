@@ -342,7 +342,7 @@ def getPacingRate(bufferData, phase='test'):
         df = df.append({
                     'ALIAS':bufferData[0],
                     'STREAMS':bufferData[1],
-                    'PACING':5,
+                    'PACING':'5gbit',
                     'THROUGHPUT (Sender)':bufferData[2],
                     'LATENCY (min.)':bufferData[3],
                     'LATENCY (max.)':bufferData[4],
