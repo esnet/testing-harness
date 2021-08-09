@@ -373,6 +373,8 @@ class Job:
                     harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
 
                     host = harnessInput_dict['start']['connecting_to']['host']
+                    if host=='127.0.0.1':
+                        host='localhost'
                     print(f"host:{host}")
                     streams = harnessInput_dict['start']['test_start']['num_streams']
                     print(f"streams:{streams}")

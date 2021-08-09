@@ -359,6 +359,7 @@ def getPacingRate(bufferData, phase='test'):
     dataloader  = torch.utils.data.DataLoader(data, batch_size=256)
 
     inputFea = len(data[0][0])
+    print("Length of Input Feautures: ", inputFea)
     model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
     print("\n", model)
 
@@ -380,7 +381,7 @@ def getPacingRate(bufferData, phase='test'):
 
         except Exception as e:
             print(f"Exception error: {e}")
-            print(f"{clr.F}Note: checkpoint should contain a pre-trained doesn't, otherwise switch the training phase.{clr.E}")
+            print(f"{clr.F}Note: checkpoint folder should contain a pre-trained model, or switch the training phase.{clr.E}")
 
     return pacing
 
