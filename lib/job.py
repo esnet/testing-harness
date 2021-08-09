@@ -25,7 +25,6 @@ from lib.model import DATA
 from lib.model import RECEIVEFEATURES
 from lib.model import PACINGDATASET
 from lib.model import PACINGCLASSIFIER
-import pandas as pd
 
 loopbacks = ["localhost", "127.0.0.1", "::1"]
 csv_host_opts = ["hostname", "alias", "profile"]
@@ -394,7 +393,6 @@ class Job:
 
             bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
             pred = getPacingRate(bufferData, phase='test')
-
 
             # XXX: need a generalize method to expand sweep options and collect md for each
             for pace in self.pacing:
