@@ -391,8 +391,8 @@ class Job:
                 except Exception as e:
                     print(e)
 
-            bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
-            pred = getPacingRate(bufferData, phase='test')
+                bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
+                pred = getPacingRate(bufferData, phase='test')
 
             # XXX: need a generalize method to expand sweep options and collect md for each
             for pace in self.pacing:
