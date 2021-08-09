@@ -380,7 +380,7 @@ def getPacingRate(bufferData, phase='test'):
 
         except Exception as e:
             print(f"Exception error: {e}")
-            print(f"{clr.F}No pre-trained model found, please train a model first before prediction.{clr.E}")
+            print(f"{clr.F}Note: checkpoint should contain a pre-trained doesn't, otherwise switch the training phase.{clr.E}")
 
     return pacing
 
