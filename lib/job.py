@@ -386,7 +386,7 @@ class Job:
                     
                     bytes_ = harnessInput_dict['end']['sum_sent']['bytes']
 
-                    # print(harnessInput_frmt_dict)
+                    print(harnessInput_frmt_dict)
                     print(f"host:{host}\nstreams:{streams}\nthroughput:{throughput}\nmin_rtt:{min_rtt}\nmax_rtt:{max_rtt}\nmean_rtt:{mean_rtt}\nretransmits:{retransmits}\ncc_type:{cc_type}\nbytes:{bytes_}")
                 except Exception as e:
                     print(e)
