@@ -348,7 +348,7 @@ def getPacingRate(bufferData, phase='test'):
                     'LATENCY (max.)':bufferData[4],
                     'RETRANSMITS':bufferData[5],
                     'CONGESTION (Sender)':bufferData[6],
-                    })
+                    }, ignore_index=True)
 
     X, y, num_of_classes = prep._preprocessing(df)
     X = torch.tensor(X)
