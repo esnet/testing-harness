@@ -20,11 +20,11 @@ from lib.tcptrace import launch_tcptrace
 from lib.ampq import AMPQSender
 from lib.profile import ProfileManager, TrafficController
 
-from model import SEEDEVERYTHING
-from model import DATA
-from model import RECEIVEFEATURES
-from model import PACINGDATASET
-from model import PACINGCLASSIFIER
+from lib.model import SEEDEVERYTHING
+from lib.model import DATA
+from lib.model import RECEIVEFEATURES
+from lib.model import PACINGDATASET
+from lib.model import PACINGCLASSIFIER
 
 loopbacks = ["localhost", "127.0.0.1", "::1"]
 csv_host_opts = ["hostname", "alias", "profile"]
@@ -392,7 +392,7 @@ class Job:
                     print(e)
 
             bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
-            getPacingRate(bufferData, phase='test')
+            pred = getPacingRate(bufferData, phase='test')
 
 
             # XXX: need a generalize method to expand sweep options and collect md for each
