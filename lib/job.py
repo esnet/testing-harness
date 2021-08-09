@@ -22,9 +22,9 @@ from lib.profile import ProfileManager, TrafficController
 
 from lib.model import SEEDEVERYTHING
 from lib.model import DATA
-from lib.model import RECEIVEFEATURES
 from lib.model import PACINGDATASET
 from lib.model import PACINGCLASSIFIER
+from lib.model import getPacingRate
 
 loopbacks = ["localhost", "127.0.0.1", "::1"]
 csv_host_opts = ["hostname", "alias", "profile"]
