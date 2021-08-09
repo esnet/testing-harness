@@ -366,8 +366,10 @@ def getPacingRate(bufferData, phase='test'):
         try:
             # Get the features from iperf3 prob test
 
+            print("\nInside the inference stage")
             # Load the model
             inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
+            print(f"printing the input sample: {data[:-1]}\n")
             inputSample, groundtruth = data[:-1]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
