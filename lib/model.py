@@ -358,7 +358,8 @@ def getPacingRate(bufferData, phase='test'):
     data = PACINGDATASET(tensors=(X, y), transform=None)
     dataloader  = torch.utils.data.DataLoader(data, batch_size=256)
 
-    model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=len(data[0][0]))
+    inputFea = len(traindata[0][0])
+    model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
     print("\n", model)
 
     fn = os.path.join(os.getcwd(), "checkpoint/best.pt")
