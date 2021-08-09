@@ -362,6 +362,7 @@ def getPacingRate(bufferData, phase='test'):
     print("\n", model)
 
     # fn = os.path.join(rootdir,"checkpoint/best.pt")
+    print(f"Current working directory: {os.getcwd ()}")
     fn = "checkpoint/best.pt"
     if phase=="test" and os.path.exists(fn):
         try:
