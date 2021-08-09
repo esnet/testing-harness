@@ -373,21 +373,28 @@ class Job:
                     harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
 
                     host = harnessInput_dict['start']['connecting_to']['host']
+                    print(f"host:{host}")
                     streams = harnessInput_dict['start']['test_start']['num_streams']
+                    print(f"streams:{streams}")
 
                     throughput = harnessInput_dict['end']['sum_sent']['bits_per_second']
-                    retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
-                    
-                    cc_type = harnessInput_dict['end']['sender_tcp_congestion']
-                    
-                    min_rtt = harnessInput_dict['end']['streams']['sender']['min_rtt']
-                    max_rtt = harnessInput_dict['end']['streams']['sender']['max_rtt']
-                    mean_rtt = harnessInput_dict['end']['streams']['sender']['mean_rtt']
-                    
-                    bytes_ = harnessInput_dict['end']['sum_sent']['bytes']
+                    print(f"throughput:{throughput}")
 
-                    print(harnessInput_frmt_dict)
-                    print(f"host:{host}\nstreams:{streams}\nthroughput:{throughput}\nmin_rtt:{min_rtt}\nmax_rtt:{max_rtt}\nmean_rtt:{mean_rtt}\nretransmits:{retransmits}\ncc_type:{cc_type}\nbytes:{bytes_}")
+                    retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
+                    print(f"retransmits:{retransmits}")
+
+                    cc_type = harnessInput_dict['end']['sender_tcp_congestion']
+                    print(f"cc_type:{cc_type}")
+
+                    min_rtt = harnessInput_dict['end']['streams'][0]['sender']['min_rtt']
+                    max_rtt = harnessInput_dict['end']['streams'][0]['sender']['max_rtt']
+                    mean_rtt = harnessInput_dict['end']['streams'][0]['sender']['mean_rtt']
+                    print(f"min_rtt:{min_rtt}\nmax_rtt:{max_rtt}\nmean_rtt:{mean_rtt}")
+
+                    bytes_ = harnessInput_dict['end']['sum_sent']['bytes']
+                    print(f"bytes_:{bytes_}")
+
+                    # print(harnessInput_frmt_dict)
                 except Exception as e:
                     print(e)
 
