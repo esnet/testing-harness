@@ -361,9 +361,9 @@ def getPacingRate(bufferData, phase='test'):
     model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=len(data[0][0]))
     print("\n", model)
 
-    # fn = os.path.join(rootdir,"checkpoint/best.pt")
-    print(f"Current working directory: {os.getcwd ()}")
-    fn = "checkpoint/best.pt"
+    fn = os.path.join(os.getcwd(), "checkpoint/best.pt")
+    print(f"Current working directory: {fn}")
+
     if phase=="test" and os.path.exists(fn):
         try:
             # Get the features from iperf3 prob test
