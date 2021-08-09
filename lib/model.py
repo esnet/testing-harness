@@ -329,6 +329,56 @@ class PACINGCLASSIFIER (nn.Module):
         return pred.item()
 
 
+def getPacingRate(bufferData, phase='test'):
+
+    seeder = SEEDEVERYTHING()
+    seeder._weight_init_()
+
+    # Preprocessing
+    prep = DATA("data/statistics-5.csv")
+    df = prep._df_load_and_clean("data/statistics-5.csv")
+
+    if bufferData:
+        df = df.append({
+                    'ALIAS':bufferData[0],
+                    'STREAMS':bufferData[1],
+                    'PACING':5,
+                    'THROUGHPUT (Sender)':bufferData[2],
+                    'LATENCY (min.)':bufferData[3],
+                    'LATENCY (max.)':bufferData[4],
+                    'RETRANSMITS':bufferData[5],
+                    'CONGESTION (Sender)':bufferData[6],
+                    })
+
+    X, y, num_of_classes = prep._preprocessing(df)
+    X = torch.tensor(X)
+    y = torch.tensor(y)
+
+    # Dataset w/o any tranformations
+    data = PACINGDATASET(tensors=(X, y), transform=None)
+    dataloader  = torch.utils.data.DataLoader(data, batch_size=256)
+
+    model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=len(data[0][0]))
+    print("\n", model)
+
+    fn = os.path.join(rootdir,"checkpoint/best.pt")
+    if phase=="test" and os.path.exists(fn):
+        try:
+            # Get the features from iperf3 prob test
+
+            # Load the model
+            inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
+            inputSample, groundtruth = data[:-1]
+
+            pacing = model._test(inferenceModel, inputSample, inputFea)
+            print(f"Predicted pacing rate: {clr.G}{pacing}{clr.E}\n")
+
+        except Exception as e:
+            print("No pre-trained model found, please train a model first before prediction.")
+
+    return pacing
+
+
 def main():
 
     parser = argparse.ArgumentParser(description='Testpoint Statistics')
@@ -371,8 +421,7 @@ def main():
     y_train = torch.tensor(y_train)
     X_test  = torch.tensor(X_test)
     y_test  = torch.tensor(y_test)
-    
-    BESTLOSS = 10
+
     lossFunction  = nn.CrossEntropyLoss()
     # BCE = nn.BCELoss(reduction='mean')
     # MSE = nn.MSELoss(reduction='mean') # 'mean', 'sum'. 'none'
@@ -410,7 +459,7 @@ def main():
             # inputFea = []
             inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
 
-            bufferReader = RECEIVEFEATURES()
+            # bufferReader = RECEIVEFEATURES()
             # inputSample  = bufferReader._read_buffer()
             inputSample, groundtruth = testdata[100]
 
@@ -434,6 +483,7 @@ def main():
         print(f"Groundtruth pacing rate: {clr.G}{groundtruth.item()}{clr.E}\nPredicted pacing rate:  {clr.G}{pacing}{clr.E}\n")
 
 
+BESTLOSS = 10
 if __name__ == "__main__":
     main()
 

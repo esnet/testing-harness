@@ -20,6 +20,11 @@ from lib.tcptrace import launch_tcptrace
 from lib.ampq import AMPQSender
 from lib.profile import ProfileManager, TrafficController
 
+from model import SEEDEVERYTHING
+from model import DATA
+from model import RECEIVEFEATURES
+from model import PACINGDATASET
+from model import PACINGCLASSIFIER
 
 loopbacks = ["localhost", "127.0.0.1", "::1"]
 csv_host_opts = ["hostname", "alias", "profile"]
@@ -366,18 +371,29 @@ class Job:
                 try:
                     harnessInput_dict = json.loads(res)
                     harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
-                    
-                    throughput = harnessInput_dict['end']['sum_sent']['bits_per_second']
-                    retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
-                    bytes_ = harnessInput_dict['end']['sum_sent']['bytes']
-                    cc_type = harnessInput_dict['end']['sender_tcp_congestion']
 
                     host = harnessInput_dict['start']['connecting_to']['host']
                     streams = harnessInput_dict['start']['test_start']['num_streams']
 
-                    print(f"throughput:{throughput}\nretransmits:{retransmits}\nbytes:{bytes_}\ncc_type:{cc_type}\nhost:{host}\nstreams:{streams}")
+                    throughput = harnessInput_dict['end']['sum_sent']['bits_per_second']
+                    retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
+                    
+                    cc_type = harnessInput_dict['end']['sender_tcp_congestion']
+                    
+                    min_rtt = harnessInput_dict['end']['streams']['sender']['min_rtt']
+                    max_rtt = harnessInput_dict['end']['streams']['sender']['max_rtt']
+                    mean_rtt = harnessInput_dict['end']['streams']['sender']['mean_rtt']
+                    
+                    bytes_ = harnessInput_dict['end']['sum_sent']['bytes']
+
+                    # print(harnessInput_frmt_dict)
+                    print(f"host:{host}\nstreams:{streams}\nthroughput:{throughput}\nmin_rtt:{min_rtt}\nmax_rtt:{max_rtt}\nmean_rtt:{mean_rtt}\nretransmits:{retransmits}\ncc_type:{cc_type}\nbytes:{bytes_}")
                 except Exception as e:
                     print(e)
+
+            bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
+            getPacingRate(bufferData, phase='test')
+
 
             # XXX: need a generalize method to expand sweep options and collect md for each
             for pace in self.pacing:
