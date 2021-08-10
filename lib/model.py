@@ -340,15 +340,15 @@ def getPacingRate(bufferData, phase='test'):
 
     if bufferData:
         df = df.append({
-                    'ALIAS':bufferData[0],
-                    'STREAMS':bufferData[1],
-                    'PACING':"5gbit",
-                    'THROUGHPUT (Sender)':bufferData[2],
-                    'LATENCY (min.)':bufferData[3],
-                    'LATENCY (max.)':bufferData[4],
-                    'RETRANSMITS':bufferData[5],
-                    'CONGESTION (Sender)':bufferData[6],
-                    }, ignore_index=True)
+                        'ALIAS':"hostA", # bufferData[0],
+                        'STREAMS':bufferData[1],
+                        'PACING':"6gbit",
+                        'THROUGHPUT (Sender)':bufferData[2],
+                        'LATENCY (min.)':bufferData[3],
+                        'LATENCY (max.)':bufferData[4],
+                        'RETRANSMITS':bufferData[5],
+                        'CONGESTION (Sender)':bufferData[6],
+                        }, ignore_index=True)
 
     X, y, num_of_classes = prep._preprocessing(df)
     X = torch.tensor(X)
@@ -360,6 +360,8 @@ def getPacingRate(bufferData, phase='test'):
 
     inputFea = len(data[0][0])
     print("Length of Input Feautures: ", inputFea)
+    print("Length of Input: ", len(bufferData))
+
     model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
     print("\n", model)
 
@@ -373,8 +375,8 @@ def getPacingRate(bufferData, phase='test'):
             print("\nInside the inference stage")
             # Load the model
             inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
-            print(f"printing the input sample: {data[:-1]}\n")
-            inputSample, groundtruth = data[:-1]
+            print(f"printing the input sample: {data[len(data)-1]}\n")
+            inputSample, groundtruth = data[len(data)-1]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
             print(f"Predicted pacing rate: {clr.G}{pacing}{clr.E}\n")
@@ -493,6 +495,7 @@ def main():
 BESTLOSS = 10
 if __name__ == "__main__":
     main()
+
 
 
 
