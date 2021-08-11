@@ -140,36 +140,23 @@ class DATA:
                                                              columns=mlb.classes_),
                             how = 'left', lsuffix='left', rsuffix='right')
 
-        X = df_[df_.columns.values].values
         y = df_['PACING'].values
         y = y.astype('float')
+
+        df_train = df_.drop(['PACING'], axis=1)
+        X = df_train[df_train.columns.values].values
 
         """
         Normalization: This estimator scales and translates each feature individually 
         such that it is in the given range on the training set
         """
-        minmax_scale = preprocessing.MinMaxScaler().fit(df_[df_.columns.values])
-        df_minmax = minmax_scale.transform(df_[df_.columns.values])
+        minmax_scale = preprocessing.MinMaxScaler().fit(df_train[df_train.columns.values])
+        df_minmax = minmax_scale.transform(df_train[df_train.columns.values])
 
-        final_df = pd.DataFrame(df_minmax, columns=df_.columns.values)
-        X = final_df[df_.columns.values].values
+        final_df = pd.DataFrame(df_minmax, columns=df_train.columns.values)
+        X = final_df[df_train.columns.values].values
 
         return X, y, num_of_classes
-
-
-class RECEIVEFEATURES:
-    def __init__(self):
-        self.inputFea = []
-        self.statfile = '~/.json'
-
-    def _file_reader(self):
-        # Get data through the json file
-        jsonfile = open(self.statfile, "r")
-        data = json.loads(jsonfile)
-
-    def _read_buffer(self):
-        # Get the statistics data from the buffer of pre-src-cmd
-        pass
 
 
 # Custom data loader for ELK stack dataset
@@ -199,15 +186,21 @@ class PACINGCLASSIFIER (nn.Module):
     Pacing Classifier is a supervised approach to the pacing
     prediction task (assuming interface limit 10G)
     """
-    def __init__(self, nc=21, inputFeatures=7):
+    def __init__(self, nc=20, inputFeatures=7):
         super(PACINGCLASSIFIER, self).__init__()
 
+        # self.fc1 = torch.nn.Linear(inputFeatures, 32)
+        # self.fc2 = torch.nn.Linear(32, 64)
+        # self.fc3 = torch.nn.Linear(64, 128)
+        # self.fc4 = torch.nn.Linear(128, 128)
+        # self.fc5 = torch.nn.Linear(128, 64)
+        # self.fc6 = torch.nn.Linear(64, nc)
         self.fc1 = torch.nn.Linear(inputFeatures, 32)
-        self.fc2 = torch.nn.Linear(32, 64)
-        self.fc3 = torch.nn.Linear(64, 128)
-        self.fc4 = torch.nn.Linear(128, 128)
-        self.fc5 = torch.nn.Linear(128, 64)
-        self.fc6 = torch.nn.Linear(64, nc)
+        self.fc2 = torch.nn.Linear(32, 128)
+        self.fc3 = torch.nn.Linear(128, 256)
+        self.fc4 = torch.nn.Linear(256, 256)
+        self.fc5 = torch.nn.Linear(256, 128)
+        self.fc6 = torch.nn.Linear(128, nc)
 
         """
         Fills the input Tensor with values according to the method
@@ -229,7 +222,7 @@ class PACINGCLASSIFIER (nn.Module):
         torch.nn.init.xavier_uniform_(self.fc6.weight)
         torch.nn.init.zeros_(self.fc6.bias)
 
-        self.lrelu = torch.nn.LeakyReLU(negative_slope=0.02)
+        self.lrelu = torch.nn.LeakyReLU(negative_slope=0.025)
 
     def forward(self, x):
         z = self.lrelu(self.fc1(x))
@@ -264,7 +257,7 @@ class PACINGCLASSIFIER (nn.Module):
                 loss.backward()                             # compute gradients
                 optimizer.step()                            # update weights
             
-            scheduler.step()
+            # scheduler.step()
             trainloss.append(epoch_loss)
             if epoch % args.interval == 0:
 
@@ -401,7 +394,7 @@ def main():
                         help='Total number of training epochs')
     parser.add_argument('-b', '--batch', default=256, type=int,
                         help='Batch-size in dataloader')
-    parser.add_argument('-lr', '--learning-rate', default=0.001, type=int,
+    parser.add_argument('-lr', '--learning-rate', default=0.001, type=float,
                         help='Learning rate for the optimizer')
     parser.add_argument('-i', '--interval', default=25, type=int,
                         help='Print statement interval')
@@ -412,6 +405,8 @@ def main():
     print("")
     for arg in vars(args):
         print ("%-15s: %s"%(arg,getattr(args, arg)))
+
+    BESTLOSS = 10
 
     print("")
     seeder = SEEDEVERYTHING()
@@ -448,28 +443,30 @@ def main():
                                               shuffle=True,
                                               batch_size=args.batch)
 
+    print()
     inputFea = len(traindata[0][0])
     model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
     print("\n", model)
 
-    optimizer = optim.SGD(model.parameters(),
-                         lr=args.learning_rate,
-                         momentum=0.9,
-                         weight_decay=5e-4,
-                         nesterov=True)
+    # optimizer = optim.SGD(model.parameters(),
+    #                      lr=args.learning_rate,
+    #                      momentum=0.9,
+    #                      weight_decay=5e-4,
+    #                      nesterov=True)
+    optimizer = optim.Adam(model.parameters(),
+                           lr=args.learning_rate,
+                           # weight_decay=5e-4,
+                          )
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-                                                    milestones=[200, 350],
+                                                    milestones=[350,600],
                                                     gamma=0.1)
 
     fn = os.path.join(rootdir,"checkpoint/best.pt")
     if args.phase=="test" and os.path.exists(fn):
         try:
             # Get the features from iperf3 prob test
-            # inputFea = []
             inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
 
-            # bufferReader = RECEIVEFEATURES()
-            # inputSample  = bufferReader._read_buffer()
             inputSample, groundtruth = testdata[100]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
@@ -484,15 +481,13 @@ def main():
         ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction)
 
         inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
-        bufferReader = RECEIVEFEATURES()
-        # inputSample  = bufferReader._read_buffer()
+        
         inputSample, groundtruth = testdata[101]
         pacing = model._test(inferenceModel, inputSample, inputFea)
         print(f"Normalized Input Sample :\n{clr.G}{inputSample}{clr.E}")
         print(f"Groundtruth pacing rate: {clr.G}{groundtruth.item()}{clr.E}\nPredicted pacing rate:  {clr.G}{pacing}{clr.E}\n")
 
 
-BESTLOSS = 10
 if __name__ == "__main__":
     main()
 
