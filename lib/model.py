@@ -283,7 +283,7 @@ class PACINGCLASSIFIER (nn.Module):
         print("\n*************************\nTraining complete\n")
         return model
 
-    def _loadModel(self, fn, num_of_classes, inputFea, verbose=True):
+    def _loadModel(self, fn, num_of_classes, inputFea, verbose=False):
         # Load a pre-trained model from a given path
         model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
         modelPath = torch.load(fn)
@@ -318,7 +318,7 @@ class PACINGCLASSIFIER (nn.Module):
         return pred.item()
 
 
-def getPacingRate(bufferData, phase='test'):
+def getPacingRate(bufferData, phase='test', verbose=False):
 
     seeder = SEEDEVERYTHING()
     seeder._weight_init_()
@@ -348,13 +348,17 @@ def getPacingRate(bufferData, phase='test'):
     dataloader  = torch.utils.data.DataLoader(data, batch_size=256)
 
     inputFea = len(data[0][0])
-    print("Length of Input Feautures: ", inputFea)
-    print("Length of Input: ", len(bufferData))
+    if verbose:
+        print("Length of Input Feautures: ", inputFea)
+        print("Length of Input: ", len(bufferData))
 
     model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
+    if verbose:
+        print("\n", model)
 
     fn = os.path.join(os.getcwd(), "checkpoint/best.pt")
-    print(f"Current working directory: {fn}")
+    if verbose:
+        print(f"Current working directory: {fn}")
 
     if phase=="test" and os.path.exists(fn):
         try:
@@ -363,7 +367,8 @@ def getPacingRate(bufferData, phase='test'):
             print("\nInside the inference stage")
             # Load the model
             inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
-            # print(f"printing the input sample: {data[len(data)-1]}\n")
+            if verbose:
+                print(f"printing the input sample: {data[len(data)-1]}\n")
             inputSample, groundtruth = data[len(data)-1]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
@@ -394,6 +399,8 @@ def main():
     parser.add_argument('-i', '--interval', default=25, type=int,
                         help='Print statement interval')
     parser.add_argument('-s', '--save', action='store_true',
+                        help='To save the checkpoints of the training model')
+    parser.add_argument('-v', '--verbose', action='store_true',
                         help='To save the checkpoints of the training model')
 
     args = parser.parse_args()

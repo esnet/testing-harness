@@ -402,24 +402,40 @@ class Job:
 
                 bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
                 pred = getPacingRate(bufferData, phase='test')
-
-            # XXX: need a generalize method to expand sweep options and collect md for each
-            for pace in self.pacing:
+                pace = str(pred)+"Gbit"
+                print("Pacing:", pace)
                 try:
-                    # allow clear pacing to fail
                     self.tc.clear_pacing(self.nic)
                 except:
-                    pass
+                    pass 
                 try:
-                    # but not set pacing
-                    self.tc.set_pacing(self.nic, dst, pace)
+                    self.tc.set_pacing(self.nic, dst, pred)
+
                 except Exception as e:
                     log.error(f"Could not set pacing: {e}")
                     continue
                 log.info(f"Set pacing to {pace}")
                 self._run_iters(dst, cmd, f"pacing:{pace}")
-                # export a child jobmeta for each new "job" defined by a sweep parameter
                 self._export_md(item, {"pacing": pace})
+
+            else:
+                # XXX: need a generalize method to expand sweep options and collect md for each
+                for pace in self.pacing:
+                    try:
+                        # allow clear pacing to fail
+                        self.tc.clear_pacing(self.nic)
+                    except:
+                        pass
+                    try:
+                        # but not set pacing
+                        self.tc.set_pacing(self.nic, dst, pace)
+                    except Exception as e:
+                        log.error(f"Could not set pacing: {e}")
+                        continue
+                    log.info(f"Set pacing to {pace}")
+                    self._run_iters(dst, cmd, f"pacing:{pace}")
+                    # export a child jobmeta for each new "job" defined by a sweep parameter
+                    self._export_md(item, {"pacing": pace})
 
             # reset any profiles that were set as part of option handling
             self.profile_manager.clear_profile(item)
