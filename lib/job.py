@@ -409,7 +409,7 @@ class Job:
                 except:
                     pass 
                 try:
-                    self.tc.set_pacing(self.nic, dst, pred)
+                    self.tc.set_pacing(self.nic, dst, pace)
 
                 except Exception as e:
                     log.error(f"Could not set pacing: {e}")
