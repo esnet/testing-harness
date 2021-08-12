@@ -108,7 +108,7 @@ class DATA:
                               'CONGESTION (Receiver)','BYTES (Receiver)'])
         return df
 
-    def _preprocessing(self, df):
+    def _preprocessing(self, df, verbose=False):
         print("\nStarted preprocessing ...")
         # Spliting 1gbps -> 1, gbps
         pacing = df['PACING'].values
@@ -122,7 +122,8 @@ class DATA:
         # Supervised training approach needs total number of classes for classification task
         num_of_classes = len(df['PACING'].unique())
 
-        print(f"Using the following features:\n{clr.G}{df.columns.values}{clr.E}\n")
+        if verbose:
+            print(f"Using the following features:\n{clr.G}{df.columns.values}{clr.E}\n")
 
         """
         Transform between iterable of iterables and a multilabel format.
@@ -372,7 +373,7 @@ def getPacingRate(bufferData, phase='test', verbose=False):
             inputSample, groundtruth = data[len(data)-1]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
-            print(f"Predicted pacing rate: {clr.G}{pacing}{clr.E}\n")
+            print(f"Predicted pacing rate: {clr.G}{pacing}{clr.E}")
 
         except Exception as e:
             print(f"Exception error: {e}")

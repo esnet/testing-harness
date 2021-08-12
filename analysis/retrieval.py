@@ -413,11 +413,16 @@ def main(verbose=False):
     
     num = int(last_filename.split("-")[1].split(".")[0]) # Extract the number from the last filename
 
-    if args.term=="*" and type(num)==int:
-        filename = "statistics-"+str(num+1)
-    else:
-        filename = args.term[:-1]
-
+    try:
+        if args.term=="*" and type(num)==int:
+            filename = "statistics-"+str(num+1)
+        else:
+            filename = args.term[:-1]
+    except Exception as e:
+        print(f"{clr.F}{e}{clr.E}")
+        d = datetime.datetime.now()
+        filename = str(d.month)+"-"+str(d.minute)+"-"+str(d.year)
+        
     try:
         index_response.to_csv('../data/'+str(filename)+'.csv')
         print (f"{str(filename)}.csv file written!")

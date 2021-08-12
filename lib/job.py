@@ -401,9 +401,9 @@ class Job:
                     print(e)
 
                 bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
-                pred = getPacingRate(bufferData, phase='test')
+                pred = getPacingRate(bufferData, phase='test', verbose=False)
                 pace = str(pred)+"Gbit"
-                print("Pacing:", pace)
+                print("Pacing: {pace}\n")
                 try:
                     self.tc.clear_pacing(self.nic)
                 except:
