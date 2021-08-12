@@ -189,18 +189,13 @@ class PACINGCLASSIFIER (nn.Module):
     def __init__(self, nc=20, inputFeatures=7):
         super(PACINGCLASSIFIER, self).__init__()
 
-        # self.fc1 = torch.nn.Linear(inputFeatures, 32)
-        # self.fc2 = torch.nn.Linear(32, 64)
-        # self.fc3 = torch.nn.Linear(64, 128)
-        # self.fc4 = torch.nn.Linear(128, 128)
-        # self.fc5 = torch.nn.Linear(128, 64)
-        # self.fc6 = torch.nn.Linear(64, nc)
         self.fc1 = torch.nn.Linear(inputFeatures, 32)
-        self.fc2 = torch.nn.Linear(32, 128)
-        self.fc3 = torch.nn.Linear(128, 256)
-        self.fc4 = torch.nn.Linear(256, 256)
+        self.fc2 = torch.nn.Linear(32, 64)
+        self.fc3 = torch.nn.Linear(64, 128)
+        self.fc4 = torch.nn.Linear(128, 256)
         self.fc5 = torch.nn.Linear(256, 128)
-        self.fc6 = torch.nn.Linear(128, nc)
+        self.fc6 = torch.nn.Linear(128, 64)
+        self.fc7 = torch.nn.Linear(64, nc)
 
         """
         Fills the input Tensor with values according to the method
@@ -230,7 +225,8 @@ class PACINGCLASSIFIER (nn.Module):
         z = self.lrelu(self.fc3(z))
         z = self.lrelu(self.fc4(z))
         z = self.lrelu(self.fc5(z))
-        z = self.fc6(z)  # no activation
+        z = self.lrelu(self.fc6(z))
+        z = self.fc7(z)  # no activation
         return z
 
     def _train(self, args, model, trainloader, testloader, optimizer, scheduler, lossFunction):
@@ -448,17 +444,19 @@ def main():
     model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
     print("\n", model)
 
-    # optimizer = optim.SGD(model.parameters(),
-    #                      lr=args.learning_rate,
-    #                      momentum=0.9,
-    #                      weight_decay=5e-4,
-    #                      nesterov=True)
-    optimizer = optim.Adam(model.parameters(),
-                           lr=args.learning_rate,
-                           # weight_decay=5e-4,
-                          )
+    optimizer = optim.SGD(model.parameters(),
+                         lr=args.learning_rate,
+                         momentum=0.9,
+                         # weight_decay=5e-4,
+                         # nesterov=True,
+                         )
+    # optimizer = optim.Adam(model.parameters(),
+    #                        lr=args.learning_rate,
+    #                        weight_decay=5e-4,
+    #                        )
+
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-                                                    milestones=[350,600],
+                                                    milestones=[35],
                                                     gamma=0.1)
 
     fn = os.path.join(rootdir,"checkpoint/best.pt")
