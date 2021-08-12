@@ -283,7 +283,7 @@ class PACINGCLASSIFIER (nn.Module):
         print("\n*************************\nTraining complete\n")
         return model
 
-    def _loadModel(self, fn, num_of_classes, inputFea):
+    def _loadModel(self, fn, num_of_classes, inputFea, verbose=True):
         # Load a pre-trained model from a given path
         model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
         modelPath = torch.load(fn)
@@ -352,7 +352,6 @@ def getPacingRate(bufferData, phase='test'):
     print("Length of Input: ", len(bufferData))
 
     model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
-    print("\n", model)
 
     fn = os.path.join(os.getcwd(), "checkpoint/best.pt")
     print(f"Current working directory: {fn}")
@@ -364,7 +363,7 @@ def getPacingRate(bufferData, phase='test'):
             print("\nInside the inference stage")
             # Load the model
             inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
-            print(f"printing the input sample: {data[len(data)-1]}\n")
+            # print(f"printing the input sample: {data[len(data)-1]}\n")
             inputSample, groundtruth = data[len(data)-1]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
