@@ -25,6 +25,7 @@ from lib.model import DATA
 from lib.model import PACINGDATASET
 from lib.model import PACINGCLASSIFIER
 from lib.model import getPacingRate
+from lib.model import clr
 
 loopbacks = ["localhost", "127.0.0.1", "::1"]
 csv_host_opts = ["hostname", "alias", "profile"]
@@ -65,6 +66,7 @@ class Job:
         self.src = cfg.get('src', None)
         self.dst = cfg.get('dst', None)
         self.alias = cfg.get('alias', None)
+        self.probe = cfg.get('probe', None)
         self.src_cmd = cfg.get('src-cmd', None)
         self.dst_cmd = cfg.get('dst-cmd', None)
         self.src_cmd_once = cfg.getboolean('src-cmd-once', False)
@@ -354,6 +356,8 @@ class Job:
                 log.error(f"Could not handle host options for {dst}: {e}")
                 continue
 
+            # format probe command
+            prb = self.probe.format(dst=dst)
             # format src command
             cmd = self.src_cmd.format(dst=dst)
 
@@ -367,7 +371,8 @@ class Job:
             if key in self.pacing:
                 # Let the model predict the pacing time for us
                 print("\nDetected dynamic pacing")
-                res = self._run_host_cmd(None, cmd, None, False)
+                # res = self._run_host_cmd(None, cmd, None, False)
+                res = self._run_host_cmd(None, prb, None, False)
                 try:
                     harnessInput_dict = json.loads(res)
                     harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
@@ -508,7 +513,7 @@ class Job:
         # These must run to completion
         if self.post_dst_cmd:
             th = Thread(target=self._run_host_cmd,
-                                args=(dst, self.post_dst_cmd, None, None))
+                               args=(dst, self.post_dst_cmd, None, None))
             th.start()
             th.join()
 

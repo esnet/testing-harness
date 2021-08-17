@@ -183,54 +183,111 @@ class PACINGDATASET(Dataset):
 
 # model definition
 class PACINGCLASSIFIER (nn.Module):
-    """
-    Pacing Classifier is a supervised approach to the pacing
-    prediction task (assuming interface limit 10G)
-    """
-    def __init__(self, nc=20, inputFeatures=7):
+    # """
+    # Pacing Classifier is a supervised approach to the pacing
+    # prediction task (assuming interface limit 10G)
+    # """
+    # def __init__(self, nc=20, inputFeatures=7):
+    #     super(PACINGCLASSIFIER, self).__init__()
+
+    #     self.fc1 = torch.nn.Linear(inputFeatures, 32)
+    #     self.fc2 = torch.nn.Linear(32, 64)
+    #     self.fc3 = torch.nn.Linear(64, 128)
+    #     self.fc4 = torch.nn.Linear(128, 256)
+    #     self.fc5 = torch.nn.Linear(256, 128)
+    #     self.fc6 = torch.nn.Linear(128, 64)
+    #     self.fc7 = torch.nn.Linear(64, nc)
+
+    #     """
+    #     Fills the input Tensor with values according to the method
+    #     described in "Understanding the difficulty of training deep
+    #     feedforward neural networks" - Glorot, X. & Bengio, Y. (2010),
+    #     using a uniform distribution. The resulting tensor will have
+    #     values sampled from mathcal{U}(-a, a)U(−a,a)
+    #     """
+    #     torch.nn.init.xavier_uniform_(self.fc1.weight)
+    #     torch.nn.init.zeros_(self.fc1.bias)
+    #     torch.nn.init.xavier_uniform_(self.fc2.weight)
+    #     torch.nn.init.zeros_(self.fc2.bias)
+    #     torch.nn.init.xavier_uniform_(self.fc3.weight)
+    #     torch.nn.init.zeros_(self.fc3.bias)
+    #     torch.nn.init.xavier_uniform_(self.fc4.weight)
+    #     torch.nn.init.zeros_(self.fc4.bias)
+    #     torch.nn.init.xavier_uniform_(self.fc5.weight)
+    #     torch.nn.init.zeros_(self.fc5.bias)
+    #     torch.nn.init.xavier_uniform_(self.fc6.weight)
+    #     torch.nn.init.zeros_(self.fc6.bias)
+
+    #     self.lrelu = torch.nn.LeakyReLU(negative_slope=0.025)
+
+    # def forward(self, x):
+    #     z = self.lrelu(self.fc1(x))
+    #     z = self.lrelu(self.fc2(z))
+    #     z = self.lrelu(self.fc3(z))
+    #     z = self.lrelu(self.fc4(z))
+    #     z = self.lrelu(self.fc5(z))
+    #     z = self.lrelu(self.fc6(z))
+    #     z = self.fc7(z)  # no activation
+    #     return z
+
+    def __init__(self, nc=1, inputFeatures=7, latent_feature=16):
         super(PACINGCLASSIFIER, self).__init__()
 
-        self.fc1 = torch.nn.Linear(inputFeatures, 32)
-        self.fc2 = torch.nn.Linear(32, 64)
-        self.fc3 = torch.nn.Linear(64, 128)
-        self.fc4 = torch.nn.Linear(128, 256)
-        self.fc5 = torch.nn.Linear(256, 128)
-        self.fc6 = torch.nn.Linear(128, 64)
-        self.fc7 = torch.nn.Linear(64, nc)
+        self.latent_feature = latent_feature
+        self.inputFeatures = inputFeatures
+        # encoder
+        self.enc1 = nn.Linear (in_features=self.inputFeatures, out_features=128)
+        self.enc2 = nn.Linear (in_features=128, out_features=128)
+        self.enc3 = nn.Linear (in_features=128, out_features=self.latent_feature*2)
+ 
+        # decoder
+        self.dec1 = nn.Linear (in_features=self.latent_feature, out_features=128)
+        self.dec2 = nn.Linear (in_features=128, out_features=128)
+        self.dec3 = nn.Linear (in_features=128, out_features=self.inputFeatures)
 
+        # Regressor
+        self.fc1 = torch.nn.Linear (self.inputFeatures, 32)
+        self.fc2 = torch.nn.Linear (32, 32)
+        self.fc3 = torch.nn.Linear (32, 1)
+
+    def reparameterize(self, mu, log_var):
         """
-        Fills the input Tensor with values according to the method
-        described in "Understanding the difficulty of training deep
-        feedforward neural networks" - Glorot, X. & Bengio, Y. (2010),
-        using a uniform distribution. The resulting tensor will have
-        values sampled from mathcal{U}(-a, a)U(−a,a)
+        :param mu: mean from the encoder's latent space
+        :param log_var: log variance from the encoder's latent space
         """
-        torch.nn.init.xavier_uniform_(self.fc1.weight)
-        torch.nn.init.zeros_(self.fc1.bias)
-        torch.nn.init.xavier_uniform_(self.fc2.weight)
-        torch.nn.init.zeros_(self.fc2.bias)
-        torch.nn.init.xavier_uniform_(self.fc3.weight)
-        torch.nn.init.zeros_(self.fc3.bias)
-        torch.nn.init.xavier_uniform_(self.fc4.weight)
-        torch.nn.init.zeros_(self.fc4.bias)
-        torch.nn.init.xavier_uniform_(self.fc5.weight)
-        torch.nn.init.zeros_(self.fc5.bias)
-        torch.nn.init.xavier_uniform_(self.fc6.weight)
-        torch.nn.init.zeros_(self.fc6.bias)
-
-        self.lrelu = torch.nn.LeakyReLU(negative_slope=0.025)
-
+        std = torch.exp(0.5*log_var) # standard deviation
+        eps = torch.randn_like(std) # `randn_like` as we need the same size
+        sample = mu + (eps * std) # sampling as if coming from the input space
+        return sample
+ 
     def forward(self, x):
-        z = self.lrelu(self.fc1(x))
-        z = self.lrelu(self.fc2(z))
-        z = self.lrelu(self.fc3(z))
-        z = self.lrelu(self.fc4(z))
-        z = self.lrelu(self.fc5(z))
-        z = self.lrelu(self.fc6(z))
-        z = self.fc7(z)  # no activation
-        return z
+        
+        # encoding
+        x =  F.relu(self.enc1(x))
+        x =  F.relu(self.enc2(x))
+        x = self.enc3(x).view(-1, 2, self.latent_feature)
 
-    def _train(self, args, model, trainloader, testloader, optimizer, scheduler, lossFunction):
+        # get `mu` and `log_var`
+        mu      = x[:, 0, :]    # the first feature values as mean
+        log_var = x[:, 1, :]    # the other feature values as variance
+
+        # get the latent vector through reparameterization
+        z = self.reparameterize(mu, log_var)
+ 
+        # decoding
+        x = F.relu(self.dec1(z))
+        x = F.relu(self.dec2(x))
+        x = self.dec3(x)
+        recon = torch.sigmoid(x)
+
+        # regressor
+        x = F.relu(self.fc1(recon))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+
+        return x, recon, mu, log_var
+
+    def _train(self, args, model, trainloader, testloader, optimizer, scheduler, lossFunction, BCE, MSE, accuracy):
         # Model training on the retrieved statistics.
         print("")
         print("Epoch", " Loss", "  Acc", sep=' '*11, end="\n")
@@ -247,25 +304,40 @@ class PACINGCLASSIFIER (nn.Module):
                 xs, ys = xs.float(), ys.float()
                 optimizer.zero_grad()                       # prepare gradients
 
-                output = model(xs)                          # predicted pacing rate
-                loss = lossFunction(output, ys.long())      # avg per item in batch
+                # output = model(xs)                          # predicted pacing rate
+                # # For supervised approach
+                # loss = lossFunction(output, ys.long())      # avg per item in batch
+
+                output, recon, mu, logvar = model(xs)
+                # For regression approach using VAE
+                bce_loss = BCE(ys, output.squeeze(1))
+                KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+                mse_loss = MSE(recon, xs)
+                loss = mse_loss + bce_loss + KLD 
 
                 epoch_loss += loss.item()                   # accumulate averages
                 loss.backward()                             # compute gradients
                 optimizer.step()                            # update weights
             
-            # scheduler.step()
+            if args.scd:
+                scheduler.step()
             trainloss.append(epoch_loss)
             if epoch % args.interval == 0:
 
                 model.eval()                                # evaluation phase on every epoch
-                correct, acc = 0, 0
-                with torch.no_grad():
-                    for xs, ys in testloader:
-                        xs, ys = xs.float(), ys.long()
-                        pred = torch.max(model(xs), 1)[1]
-                        correct += (pred == ys).sum().item()
-                    acc = (100 * float(correct / len(testloader.dataset)) )
+                # # Classification                                
+                # correct, acc = 0, 0
+                # with torch.no_grad():
+                #     for xs, ys in testloader:
+                #         xs, ys = xs.float(), ys.long()
+                #         output,_,_,_ = model(xs)
+                #         # pred = torch.max(model(xs), 1)[1]
+                #         correct += (pred == ys).sum().item()
+                #     acc = (100 * float(correct / len(testloader.dataset)) )
+                
+                # Regression
+                gap = 0.50
+                acc = accuracy(model, testloader.dataset, gap)
 
                 print(f"{epoch+0:03}/{EPOCH}", f"{epoch_loss:.4f}", f"{acc:.4f}", sep=' '*10, end="\n")
 
@@ -286,11 +358,16 @@ class PACINGCLASSIFIER (nn.Module):
         return model
 
     def _loadModel(self, fn, num_of_classes, inputFea, verbose=False):
+        
         # Load a pre-trained model from a given path
         model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
         modelPath = torch.load(fn)
-        model.load_state_dict(modelPath['model_state'])
+        try:
+            model.load_state_dict(modelPath['model_state'])
+        except:
+            model.load_state_dict(modelPath)
         model.to(device)
+        
         print("*"*25)
         print("Pre-trained model loaded")
         print("*"*25)
@@ -314,7 +391,6 @@ class PACINGCLASSIFIER (nn.Module):
             # Using a test data sample for Demo
             sample = inputSample.float().unsqueeze_(0)
 
-
         # Inference stage
         model.eval()
         with torch.no_grad():
@@ -333,7 +409,7 @@ def getPacingRate(bufferData, phase='test', verbose=False):
 
     if bufferData:
         df = df.append({
-                        'ALIAS':"hostA", # bufferData[0],
+                        'ALIAS':bufferData[0],
                         'STREAMS':bufferData[1],
                         'PACING':"6gbit",
                         'THROUGHPUT (Sender)':bufferData[2],
@@ -384,6 +460,28 @@ def getPacingRate(bufferData, phase='test', verbose=False):
 
     return pacing
 
+# accuracy computation
+def accuracy(model, ds, pct):
+    # assumes model.eval()
+    # percent correct within pct of true pacing rate
+    n_correct = 0; n_wrong = 0
+
+    for i in range(len(ds)):
+        (X, Y) = ds[i]                # (predictors, target)
+        X, Y = X.float(), Y.float()
+        with torch.no_grad():
+            output, _, _, _ = model(X)         # computed price
+
+        abs_delta = np.abs(output.item() - Y.item())
+        max_allow = np.abs(pct * Y.item())
+        if abs_delta < max_allow:
+            n_correct +=1
+        else:
+            n_wrong += 1
+
+    acc = (n_correct * 1.0) / (n_correct + n_wrong)
+    return acc*100
+
 
 def main():
 
@@ -391,21 +489,33 @@ def main():
 
     parser.add_argument('-p', '--phase', default="test", type=str,
                         help='Training and Testing Phase. {train/test}')
+    
     parser.add_argument('--infile', default="data/statistics-5.csv", type=str,
                         help='CSV file used for training the model.')
 
     parser.add_argument('-e', '--epoch', default=300, type=int,
                         help='Total number of training epochs')
+    
     parser.add_argument('-b', '--batch', default=256, type=int,
                         help='Batch-size in dataloader')
+    
     parser.add_argument('-lr', '--learning-rate', default=0.001, type=float,
                         help='Learning rate for the optimizer')
+    
     parser.add_argument('-i', '--interval', default=25, type=int,
                         help='Print statement interval')
+
     parser.add_argument('-s', '--save', action='store_true',
                         help='To save the checkpoints of the training model')
+    
     parser.add_argument('-v', '--verbose', action='store_true',
+                        help='v flag prints all the steps results throughout the process')
+    
+    parser.add_argument('--scd', action='store_true',
                         help='To save the checkpoints of the training model')
+    
+    parser.add_argument('--opt', default="sgd", type=str,
+                        help='Optimizer {sgd/adam}')
 
     args = parser.parse_args()
     print("")
@@ -433,8 +543,8 @@ def main():
     y_test  = torch.tensor(y_test)
 
     lossFunction  = nn.CrossEntropyLoss()
-    # BCE = nn.BCELoss(reduction='mean')
-    # MSE = nn.MSELoss(reduction='mean') # 'mean', 'sum'. 'none'
+    BCE = nn.BCEWithLogitsLoss() # nn.BCELoss(reduction='mean')
+    MSE = nn.MSELoss(reduction='mean') # 'mean', 'sum'. 'none'
 
     # Dataset w/o any tranformations
     traindata   = PACINGDATASET(tensors=(X_train, y_train),
@@ -454,17 +564,19 @@ def main():
     model = PACINGCLASSIFIER (nc=num_of_classes, inputFeatures=inputFea)
     print("\n", model)
 
-    optimizer = optim.SGD(model.parameters(),
-                         lr=args.learning_rate,
-                         momentum=0.9,
-                         # weight_decay=5e-4,
-                         # nesterov=True,
-                         )
-    # optimizer = optim.Adam(model.parameters(),
-    #                        lr=args.learning_rate,
-    #                        weight_decay=5e-4,
-    #                        )
-
+    if args.opt=="sgd":
+        optimizer = optim.SGD(model.parameters(),
+                            lr=args.learning_rate,
+                            momentum=0.9,
+                            # weight_decay=5e-4,
+                            # nesterov=True,
+                            )
+    elif args.opt=="adam":
+        optimizer = optim.Adam(model.parameters(),
+                            lr=args.learning_rate,
+                            weight_decay=5e-4,
+                            )
+    # if args.scd:
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
                                                     milestones=[35],
                                                     gamma=0.1)
@@ -482,11 +594,11 @@ def main():
             print(f"Groundtruth pacing rate: {clr.G}{groundtruth.item()}{clr.E}\nPredicted pacing rate: {clr.G}{pacing}{clr.E}\n")
         except:
             # DO THE TRAINING
-            ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction)          
+            ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction, BCE, MSE, accuracy)
 
     elif args.phase=="train":
         # DO THE TRAINING
-        ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction)
+        ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction, BCE, MSE, accuracy)
 
         inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
         
