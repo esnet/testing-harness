@@ -108,8 +108,8 @@ class DATA:
                               'CONGESTION (Receiver)','BYTES (Receiver)'])
         return df
 
-    def _preprocessing(self, df, verbose=False):
-        print("\nStarted preprocessing ...")
+    def _preprocessing(self, df):
+        print("Started preprocessing ...")
         # Spliting 1gbps -> 1, gbps
         pacing = df['PACING'].values
         for i, p in enumerate(pacing):
@@ -122,8 +122,7 @@ class DATA:
         # Supervised training approach needs total number of classes for classification task
         num_of_classes = len(df['PACING'].unique())
 
-        if verbose:
-            print(f"Using the following features:\n{clr.G}{df.columns.values}{clr.E}\n")
+        print(f"Using the following features:\n{clr.G}{df.columns.values}{clr.E}")
 
         """
         Transform between iterable of iterables and a multilabel format.
@@ -281,8 +280,7 @@ class PACINGCLASSIFIER (nn.Module):
                     torch.save(info_dict, fn)               # save checkpoint
 
         torch.save (info_dict, "checkpoint/best.pt")
-        print("*"*25)
-        print("Training complete\n")
+        print("\n*************************\nTraining complete\n")
         return model
 
     def _loadModel(self, fn, num_of_classes, inputFea, verbose=False):
@@ -291,9 +289,7 @@ class PACINGCLASSIFIER (nn.Module):
         modelPath = torch.load(fn)
         model.load_state_dict(modelPath['model_state'])
         model.to(device)
-        print("*"*25)
-        print("Pre-trained model loaded")
-        print("*"*25)
+        # print("[STEP 6.] Pre-trained model loaded")
         return model
 
     def _test(self, model, inputSample, inputFea):
@@ -324,18 +320,21 @@ class PACINGCLASSIFIER (nn.Module):
 
 def getPacingRate(bufferData, phase='test', verbose=False):
 
+    print(f"{clr.H}[STEP 4.] Carefully setting random seed across ML pipeline{clr.E}")
     seeder = SEEDEVERYTHING()
     seeder._weight_init_()
 
+    print(f"{clr.H}[STEP 5.] Initiating the Preprocessing of the probe input sample{clr.E}")
     # Preprocessing
     prep = DATA("data/statistics-5.csv")
+    print("loading last month historical data using dynamic stat retrieval feature")
     df = prep._df_load_and_clean("data/statistics-5.csv")
 
     if bufferData:
         df = df.append({
-                        'ALIAS':"hostA", # bufferData[0],
+                        'ALIAS':bufferData[0], # "hostB"
                         'STREAMS':bufferData[1],
-                        'PACING':"6gbit",
+                        'PACING':"2gbit",
                         'THROUGHPUT (Sender)':bufferData[2],
                         'LATENCY (min.)':bufferData[3],
                         'LATENCY (max.)':bufferData[4],
@@ -368,7 +367,8 @@ def getPacingRate(bufferData, phase='test', verbose=False):
         try:
             # Get the features from iperf3 prob test
 
-            print("\nInside the inference stage")
+            print(f"{clr.H}[STEP 6.] Pre-trained model loaded{clr.E}")
+            print(f"{clr.H}[STEP 7.] Inside the inference stage{clr.E}")
             # Load the model
             inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
             if verbose:
@@ -376,7 +376,7 @@ def getPacingRate(bufferData, phase='test', verbose=False):
             inputSample, groundtruth = data[len(data)-1]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
-            print(f"Predicted pacing rate: {clr.G}{pacing}{clr.E}")
+            print(f"{clr.H}[STEP 8.] Predicted pacing rate: {clr.G}{pacing}{clr.E}{clr.E}\n")
 
         except Exception as e:
             print(f"Exception error: {e}")
@@ -498,3 +498,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+

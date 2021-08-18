@@ -53,6 +53,7 @@ def skip_comments(lines):
 
 class Job:
     def __init__(self, name, cfg, defaults, outdir, hostlist, nic, archive):
+        print(f"\n{clr.H}[STEP 1.] Reading ini configurations{clr.E}")
         self.uuid = str(uuid.uuid4())
         self.name = name
         self.conf = cfg
@@ -370,14 +371,14 @@ class Job:
 
             if key in self.pacing:
                 # Let the model predict the pacing time for us
-                print("\nDetected dynamic pacing")
+                print(f"\nDetected dynamic pacing\n\n{clr.H}[STEP 2.] Running 15s Probe test ...{clr.E}")
                 # res = self._run_host_cmd(None, cmd, None, False)
                 res = self._run_host_cmd(None, prb, None, False)
                 try:
                     harnessInput_dict = json.loads(res)
                     harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
 
-                    host = harnessInput_dict['start']['connecting_to']['host']
+                    host = item['alias'] # harnessInput_dict['start']['connecting_to']['host']
                     if host=='127.0.0.1':
                         host='localhost'
                     print(f"host:{host}")
@@ -406,9 +407,12 @@ class Job:
                     print(e)
 
                 bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
-                pred = getPacingRate(bufferData, phase='test', verbose=False)
+                print(f"{clr.H}[STEP 3.] Passing the Probe outcome to the Pace predictor{clr.E}")
+                pred = getPacingRate(bufferData, phase='test')
                 pace = str(pred)+"Gbit"
-                print("Pacing: {pace}\n")
+                print("Pacing:", pace)
+                print(f"{clr.H}[STEP 9.] Running the actual test ...{clr.E}")
+
                 try:
                     self.tc.clear_pacing(self.nic)
                 except:
@@ -422,6 +426,7 @@ class Job:
                 log.info(f"Set pacing to {pace}")
                 self._run_iters(dst, cmd, f"pacing:{pace}")
                 self._export_md(item, {"pacing": pace})
+                print("\n\n")
 
             else:
                 # XXX: need a generalize method to expand sweep options and collect md for each
@@ -513,7 +518,7 @@ class Job:
         # These must run to completion
         if self.post_dst_cmd:
             th = Thread(target=self._run_host_cmd,
-                               args=(dst, self.post_dst_cmd, None, None))
+                                args=(dst, self.post_dst_cmd, None, None))
             th.start()
             th.join()
 

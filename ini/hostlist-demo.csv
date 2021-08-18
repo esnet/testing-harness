@@ -1,0 +1,3 @@
+hostname,alias,profile
+10.201.1.2,hostC,hostB
+10.201.1.2,hostB,hostA

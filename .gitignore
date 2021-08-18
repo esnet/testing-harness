@@ -6,3 +6,5 @@
 
 # Code Editor
 .vscode
+
+__pycache__
