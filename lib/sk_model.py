@@ -292,8 +292,8 @@ def getPacingRate(bufferData, phase='test', verbose=False):
     # Reload the model
     model_reloaded = pacingclassifier._loadModel (fn)
     # Apply testing sample/data
-    pacingRate = pacingclassifier._test(model_reloaded, X[len(X)-1], len(X[len(X)-1]), le)
-    print(f"Predicted pacing rate: {clr.H}{pacingRate}{clr.E}")
+    pacing = pacingclassifier._test(model_reloaded, X[len(X)-1], len(X[len(X)-1]), le)
+    print(f"Predicted pacing rate: {clr.H}{pacing}{clr.E}")
 
     return pacing
 
