@@ -388,6 +388,8 @@ class Job:
                     harnessInput_dict = json.loads(res)
                     harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
 
+                    print("\n")
+
                     host = item['alias'] # harnessInput_dict['start']['connecting_to']['host']
                     if host=='127.0.0.1':
                         host='localhost'
@@ -404,14 +406,14 @@ class Job:
                     print("{:<25} {:<25.4f}".format('retransmits', retransmits))
 
                     cc_type = harnessInput_dict['end']['sender_tcp_congestion']
-                    print("{:<25} {:<25.4f}".format('congestion control type', cc_type))
+                    print("{:<25} {:<25}".format('congestion control type', cc_type))
 
                     min_rtt = harnessInput_dict['end']['streams'][0]['sender']['min_rtt']
                     max_rtt = harnessInput_dict['end']['streams'][0]['sender']['max_rtt']
                     mean_rtt = harnessInput_dict['end']['streams'][0]['sender']['mean_rtt']
-                    print("{:<25} {:<25}".format('rtt (min)', min_rtt))
-                    print("{:<25} {:<25}".format('rtt (max)', max_rtt))
-                    print("{:<25} {:<25}".format('rtt (mean)', mean_rtt))
+                    print("{:<25} {:<25.4f}".format('rtt (min)', min_rtt))
+                    print("{:<25} {:<25.4f}".format('rtt (max)', max_rtt))
+                    print("{:<25} {:<25.4f}".format('rtt (mean)', mean_rtt))
 
                     bytes_s = harnessInput_dict['end']['sum_sent']['bytes']
                     print("{:<25} {:<25.4f}".format('bytes (sent)', bytes_s))
