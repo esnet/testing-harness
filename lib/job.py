@@ -398,7 +398,7 @@ class Job:
                     throughput_s = harnessInput_dict['end']['sum_sent']['bits_per_second']
                     print("{:<20} {:<20.4f}".format('throughput (sender)', throughput_s))
                     throughput_r = harnessInput_dict['end']['sum_received']['bits_per_second']
-                    print("{:<20} {:<20.4f}".format('throughput (receiver)', throughtput_r))
+                    print("{:<20} {:<20.4f}".format('throughput (receiver)', throughput_r))
 
                     retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
                     print("{:<20} {:<20.4f}".format('retransmits', retransmits))
