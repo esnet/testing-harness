@@ -393,30 +393,30 @@ class Job:
                         host='localhost'
                     print(f"host:{host}")
                     streams = harnessInput_dict['start']['test_start']['num_streams']
-                    print("{:<20} {:<20.4f}".format('streams', streams))
+                    print("{:<25} {:<25.4f}".format('streams', streams))
 
                     throughput_s = harnessInput_dict['end']['sum_sent']['bits_per_second']
-                    print("{:<20} {:<20.4f}".format('throughput (sender)', throughput_s))
+                    print("{:<25} {:<25.4f}".format('throughput (sender)', throughput_s))
                     throughput_r = harnessInput_dict['end']['sum_received']['bits_per_second']
-                    print("{:<20} {:<20.4f}".format('throughput (receiver)', throughput_r))
+                    print("{:<25} {:<25.4f}".format('throughput (receiver)', throughput_r))
 
                     retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
-                    print("{:<20} {:<20.4f}".format('retransmits', retransmits))
+                    print("{:<25} {:<25.4f}".format('retransmits', retransmits))
 
                     cc_type = harnessInput_dict['end']['sender_tcp_congestion']
-                    print("{:<20} {:<20.4f}".format('congestion control type', cc_type))
+                    print("{:<25} {:<25.4f}".format('congestion control type', cc_type))
 
                     min_rtt = harnessInput_dict['end']['streams'][0]['sender']['min_rtt']
                     max_rtt = harnessInput_dict['end']['streams'][0]['sender']['max_rtt']
                     mean_rtt = harnessInput_dict['end']['streams'][0]['sender']['mean_rtt']
-                    print("{:<20} {:<20.4f}".format('rtt (min)', min_rtt))
-                    print("{:<20} {:<20.4f}".format('rtt (max)', max_rtt))
-                    print("{:<20} {:<20.4f}".format('rtt (mean)', mean_rtt))
+                    print("{:<25} {:<25}".format('rtt (min)', min_rtt))
+                    print("{:<25} {:<25}".format('rtt (max)', max_rtt))
+                    print("{:<25} {:<25}".format('rtt (mean)', mean_rtt))
 
                     bytes_s = harnessInput_dict['end']['sum_sent']['bytes']
-                    print("{:<20} {:<20.4f}".format('bytes (sent)', bytes_s))
+                    print("{:<25} {:<25.4f}".format('bytes (sent)', bytes_s))
                     bytes_r = harnessInput_dict['end']['sum_received']['bytes']
-                    print("{:<20} {:<20.4f}".format('bytes (received)', bytes_r))
+                    print("{:<25} {:<25.4f}".format('bytes (received)', bytes_r))
 
                     print("\n")
                     # print(harnessInput_frmt_dict)
