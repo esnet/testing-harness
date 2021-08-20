@@ -425,7 +425,7 @@ class Job:
                 pace2 = str(pred2)+"Gbit"
                 print("Pacing:", pace2)
 
-                pace = str(np.mean(pred1+pred2))+"Gbit"
+                pace = str(np.mean( [pred1,pred2] ))+"Gbit"
                 print("Ensemble Pacing average: ", pace)
                 print(f"{clr.H}[STEP 9.] Running the actual test ...{clr.E}")
 
