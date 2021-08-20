@@ -263,8 +263,8 @@ def getPacingRate(bufferData, phase='test', verbose=False):
     seeder._weight_init_()
 
     # Preprocessing
-    prep = DATA(args.infile)
-    df = prep._df_load_and_clean(args.infile)
+    prep = DATA("data/statistics-5.csv")
+    df = prep._df_load_and_clean("data/statistics-5.csv")
 
     if bufferData:
         df = df.append({
@@ -285,18 +285,14 @@ def getPacingRate(bufferData, phase='test', verbose=False):
 
     X, y, num_of_classes, le = prep._preprocessing(df)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, 
-                                                test_size=0.33,
-                                                random_state=1)
-
-    pacingclassifier = PACINGCLASSIFIER(modelName=args.modelName)
+    pacingclassifier = PACINGCLASSIFIER(modelName='rf')
     model, params = pacingclassifier._defineModel()
 
     fn = "checkpoint/rfBest.pkl"
     # Reload the model
     model_reloaded = pacingclassifier._loadModel (fn)
     # Apply testing sample/data
-    pacingRate = pacingclassifier._test(model_reloaded, X_test[0], len(X_test[0]), le)
+    pacingRate = pacingclassifier._test(model_reloaded, X[len(X)-1], len(X[len(X)-1]), le)
     print(f"Predicted pacing rate: {clr.H}{pacingRate}{clr.E}")
 
     return pacing
