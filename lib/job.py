@@ -27,6 +27,8 @@ from lib.model import PACINGCLASSIFIER
 from lib.model import getPacingRate
 from lib.model import clr
 
+from lib.sk_model
+
 loopbacks = ["localhost", "127.0.0.1", "::1"]
 csv_host_opts = ["hostname", "alias", "profile"]
 default_opts = ["profile-control-url", "traffic-control-url"]
@@ -385,8 +387,10 @@ class Job:
                     streams = harnessInput_dict['start']['test_start']['num_streams']
                     print(f"streams:{streams}")
 
-                    throughput = harnessInput_dict['end']['sum_sent']['bits_per_second']
-                    print(f"throughput:{throughput}")
+                    throughput_s = harnessInput_dict['end']['sum_sent']['bits_per_second']
+                    print(f"throughput:{throughput_s}")
+                    throughput_r = harnessInput_dict['end']['sum_received']['bits_per_second']
+                    print(f"throughput:{throughput_r}")
 
                     retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
                     print(f"retransmits:{retransmits}")
@@ -399,18 +403,27 @@ class Job:
                     mean_rtt = harnessInput_dict['end']['streams'][0]['sender']['mean_rtt']
                     print(f"min_rtt:{min_rtt}\nmax_rtt:{max_rtt}\nmean_rtt:{mean_rtt}")
 
-                    bytes_ = harnessInput_dict['end']['sum_sent']['bytes']
+                    bytes_s = harnessInput_dict['end']['sum_sent']['bytes']
                     print(f"bytes_:{bytes_}\n")
+                    bytes_r = harnessInput_dict['end']['sum_sent']['bytes']
 
                     # print(harnessInput_frmt_dict)
                 except Exception as e:
                     print(e)
 
-                bufferData = [host, streams, throughput, min_rtt, max_rtt, retransmits, cc_type]
+                # bufferData1 = [host, streams, throughput_s, min_rtt, max_rtt, retransmits, cc_type]
+                bufferData2 = [host, streams, throughput_s, throughput_r, min_rtt, max_rtt, mean_rtt, retransmits, cc_type, bytes_r]
+                
+                # print(f"{clr.H}[STEP 3.] Passing the Probe outcome to the Pace predictor{clr.E}")
+                # pred1 = getPacingRate(bufferData1, phase='test')
+                # pace1 = str(pred1)+"Gbit"
+                # print("Pacing:", pace1)
+
                 print(f"{clr.H}[STEP 3.] Passing the Probe outcome to the Pace predictor{clr.E}")
-                pred = getPacingRate(bufferData, phase='test')
-                pace = str(pred)+"Gbit"
-                print("Pacing:", pace)
+                pred2 = sk_model.getPacingRate(bufferData2, phase='test')
+                pace2 = str(pred2)+"Gbit"
+                print("Pacing:", pace2)
+
                 print(f"{clr.H}[STEP 9.] Running the actual test ...{clr.E}")
 
                 try:

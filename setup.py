@@ -30,5 +30,6 @@ setup(
                       'matplotlib',
                       'pandas',
                       'sklearn',
-                      'tqdm']
+                      'tqdm',
+                      'seaborn']
 )
