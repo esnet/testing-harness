@@ -375,13 +375,15 @@ class Job:
             if key in self.pacing:
                 # Let the model predict the pacing time for us
                 print(f"\nDetected dynamic pacing\n\n{clr.H}[STEP 2.] Running 15s Probe test ...{clr.E}")
-                
+
                 try:
+                    print("Clearning pacing before running the probe.")
                     self.tc.clear_pacing(self.nic)
                 except Exception as e:
-                    print("[Clear pacing Error]--> ", e)
+                    print(f"{clr.F}[Clear pacing Error]--> {e}{clr.E}")
 
                 res = self._run_host_cmd(None, prb, None, False)
+
                 try:
                     harnessInput_dict = json.loads(res)
                     harnessInput_frmt_dict = json.dumps(harnessInput_dict, indent=4)
@@ -391,36 +393,39 @@ class Job:
                         host='localhost'
                     print(f"host:{host}")
                     streams = harnessInput_dict['start']['test_start']['num_streams']
-                    print(f"streams:{streams}")
+                    print("{:<20} {:<20.4f}".format('streams', streams))
 
                     throughput_s = harnessInput_dict['end']['sum_sent']['bits_per_second']
-                    print(f"throughput:{throughput_s}")
+                    print("{:<20} {:<20.4f}".format('throughput (sender)', throughput_s))
                     throughput_r = harnessInput_dict['end']['sum_received']['bits_per_second']
-                    print(f"throughput:{throughput_r}")
+                    print("{:<20} {:<20.4f}".format('throughput (receiver)', throughtput_r))
 
                     retransmits = harnessInput_dict['end']['sum_sent']['retransmits']
-                    print(f"retransmits:{retransmits}")
+                    print("{:<20} {:<20.4f}".format('retransmits', retransmits))
 
                     cc_type = harnessInput_dict['end']['sender_tcp_congestion']
-                    print(f"cc_type:{cc_type}")
+                    print("{:<20} {:<20.4f}".format('congestion control type', cc_type))
 
                     min_rtt = harnessInput_dict['end']['streams'][0]['sender']['min_rtt']
                     max_rtt = harnessInput_dict['end']['streams'][0]['sender']['max_rtt']
                     mean_rtt = harnessInput_dict['end']['streams'][0]['sender']['mean_rtt']
-                    print(f"min_rtt:{min_rtt}\nmax_rtt:{max_rtt}\nmean_rtt:{mean_rtt}")
+                    print("{:<20} {:<20.4f}".format('rtt (min)', min_rtt))
+                    print("{:<20} {:<20.4f}".format('rtt (max)', max_rtt))
+                    print("{:<20} {:<20.4f}".format('rtt (mean)', mean_rtt))
 
                     bytes_s = harnessInput_dict['end']['sum_sent']['bytes']
-                    print(f"bytes_:{bytes_s}\n")
+                    print("{:<20} {:<20.4f}".format('bytes (sent)', bytes_s))
                     bytes_r = harnessInput_dict['end']['sum_received']['bytes']
-                    print(f"bytes_:{bytes_r}\n")
+                    print("{:<20} {:<20.4f}".format('bytes (received)', bytes_r))
 
+                    print("\n")
                     # print(harnessInput_frmt_dict)
                 except Exception as e:
                     print(e)
 
                 bufferData1 = [host, streams, throughput_s, min_rtt, max_rtt, retransmits, cc_type]
                 bufferData2 = [host, streams, throughput_s, throughput_r, min_rtt, max_rtt, mean_rtt, retransmits, cc_type, bytes_r]
-                
+
                 print(f"{clr.H}[STEP 3.] Passing the Probe outcome to the Pace predictor{clr.E}")
                 pred1 = getPacingRate(bufferData1, phase='test')
                 pace1 = str(pred1)+"Gbit"
@@ -437,7 +442,7 @@ class Job:
                 try:
                     self.tc.clear_pacing(self.nic)
                 except:
-                    pass 
+                    pass
                 try:
                     self.tc.set_pacing(self.nic, dst, pace)
 
