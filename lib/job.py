@@ -20,6 +20,7 @@ from lib.tcptrace import launch_tcptrace
 from lib.ampq import AMPQSender
 from lib.profile import ProfileManager, TrafficController
 
+import numpy as np
 from lib.model import SEEDEVERYTHING
 from lib.model import DATA
 from lib.model import PACINGDATASET
