@@ -404,8 +404,9 @@ class Job:
                     print(f"min_rtt:{min_rtt}\nmax_rtt:{max_rtt}\nmean_rtt:{mean_rtt}")
 
                     bytes_s = harnessInput_dict['end']['sum_sent']['bytes']
-                    print(f"bytes_:{bytes_}\n")
-                    bytes_r = harnessInput_dict['end']['sum_sent']['bytes']
+                    print(f"bytes_:{bytes_s}\n")
+                    bytes_r = harnessInput_dict['end']['sum_received']['bytes']
+                    print(f"bytes_:{bytes_r}\n")
 
                     # print(harnessInput_frmt_dict)
                 except Exception as e:
