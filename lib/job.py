@@ -412,19 +412,20 @@ class Job:
                 except Exception as e:
                     print(e)
 
-                # bufferData1 = [host, streams, throughput_s, min_rtt, max_rtt, retransmits, cc_type]
+                bufferData1 = [host, streams, throughput_s, min_rtt, max_rtt, retransmits, cc_type]
                 bufferData2 = [host, streams, throughput_s, throughput_r, min_rtt, max_rtt, mean_rtt, retransmits, cc_type, bytes_r]
                 
-                # print(f"{clr.H}[STEP 3.] Passing the Probe outcome to the Pace predictor{clr.E}")
-                # pred1 = getPacingRate(bufferData1, phase='test')
-                # pace1 = str(pred1)+"Gbit"
-                # print("Pacing:", pace1)
-
                 print(f"{clr.H}[STEP 3.] Passing the Probe outcome to the Pace predictor{clr.E}")
+                pred1 = getPacingRate(bufferData1, phase='test')
+                pace1 = str(pred1)+"Gbit"
+                print("Pacing:", pace1)
+
                 pred2 = sk_model.getPacingRate(bufferData2, phase='test')
                 pace2 = str(pred2)+"Gbit"
                 print("Pacing:", pace2)
 
+                pace = str(np.mean(pred1+pred2))+"Gbit"
+                print("Ensemble Pacing average: ", pace)
                 print(f"{clr.H}[STEP 9.] Running the actual test ...{clr.E}")
 
                 try:

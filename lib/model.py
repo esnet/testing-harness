@@ -280,7 +280,7 @@ class PACINGCLASSIFIER (nn.Module):
                     torch.save(info_dict, fn)               # save checkpoint
 
         torch.save (info_dict, "checkpoint/best.pt")
-        print("\n*************************\nTraining complete\n")
+        print("Training complete")
         return model
 
     def _loadModel(self, fn, num_of_classes, inputFea, verbose=False):
