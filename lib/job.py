@@ -375,7 +375,12 @@ class Job:
             if key in self.pacing:
                 # Let the model predict the pacing time for us
                 print(f"\nDetected dynamic pacing\n\n{clr.H}[STEP 2.] Running 15s Probe test ...{clr.E}")
-                # res = self._run_host_cmd(None, cmd, None, False)
+                
+                try:
+                    self.tc.clear_pacing(self.nic)
+                except Exception as e:
+                    print("[Clear pacing Error]--> ", e)
+
                 res = self._run_host_cmd(None, prb, None, False)
                 try:
                     harnessInput_dict = json.loads(res)
@@ -425,7 +430,7 @@ class Job:
                 pace2 = str(pred2)+"Gbit"
                 print("Pacing:", pace2)
 
-                pace = str(np.mean( [pred1,pred2] ))+"Gbit"
+                pace = str( np.mean([pred1,pred2]) )+"Gbit"
                 print("Ensemble Pacing average: ", pace)
                 print(f"{clr.H}[STEP 9.] Running the actual test ...{clr.E}")
 
