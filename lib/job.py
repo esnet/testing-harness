@@ -27,7 +27,7 @@ from lib.model import PACINGCLASSIFIER
 from lib.model import getPacingRate
 from lib.model import clr
 
-from lib.sk_model
+import lib.sk_model
 
 loopbacks = ["localhost", "127.0.0.1", "::1"]
 csv_host_opts = ["hostname", "alias", "profile"]
