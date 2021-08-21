@@ -438,7 +438,7 @@ class Job:
                 print("Pacing (model 2):", pace2)
 
                 pace = str( np.mean([pred1,pred2]) )+"Gbit"
-                print(f"{clr.H}Ensemble Pacing average: {pace}{clr.E}\n")
+                print(f"Ensemble Pacing average: {clr.G}{pace}{clr.E}\n")
                 print(f"{clr.H}[STEP 9.] Running the actual test ...{clr.E}")
 
                 try:
@@ -455,6 +455,7 @@ class Job:
                 self._run_iters(dst, cmd, f"pacing:{pace}")
                 self._export_md(item, {"pacing": pace})
                 print("\n")
+                print("-"*20)
 
             else:
                 # XXX: need a generalize method to expand sweep options and collect md for each
