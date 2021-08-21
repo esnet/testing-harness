@@ -83,7 +83,7 @@ class SEEDEVERYTHING:
         torch.manual_seed(self.seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        print("Seeded everything.")
+        print("Seeded everything.\n")
 
 
 class DATA:
@@ -109,7 +109,7 @@ class DATA:
         return df
 
     def _preprocessing(self, df):
-        print("Started preprocessing ...")
+        print("Started preprocessing ...\n")
         # Spliting 1gbps -> 1, gbps
         pacing = df['PACING'].values
         for i, p in enumerate(pacing):
@@ -122,7 +122,7 @@ class DATA:
         # Supervised training approach needs total number of classes for classification task
         num_of_classes = len(df['PACING'].unique())
 
-        print(f"Using the following features:\n{clr.G}{df.columns.values}{clr.E}")
+        # print(f"Using the following features:\n{clr.G}{df.columns.values}{clr.E}")
 
         """
         Transform between iterable of iterables and a multilabel format.
@@ -235,7 +235,7 @@ class PACINGCLASSIFIER (nn.Module):
         print("Epoch", " Loss", "  Acc", sep=' '*11, end="\n")
         EPOCH = args.epoch
         trainloss = []
-        
+
         for epoch in range(0, EPOCH):
             model.train()
             torch.manual_seed(epoch+1)                      # recovery reproducibility
@@ -252,7 +252,7 @@ class PACINGCLASSIFIER (nn.Module):
                 epoch_loss += loss.item()                   # accumulate averages
                 loss.backward()                             # compute gradients
                 optimizer.step()                            # update weights
-            
+
             # scheduler.step()
             trainloss.append(epoch_loss)
             if epoch % args.interval == 0:
@@ -305,7 +305,7 @@ class PACINGCLASSIFIER (nn.Module):
             # converting the sample to tensor array
             ukn = np.array([inputSample], dtype=np.float32)
             sample = torch.tensor(ukn, dtype=torch.float32).to(device)
-        
+
         elif isinstance(inputSample, torch.Tensor):
             # Using a test data sample for Demo
             sample = inputSample.float().unsqueeze_(0)
@@ -376,7 +376,7 @@ def getPacingRate(bufferData, phase='test', verbose=False):
             inputSample, groundtruth = data[len(data)-1]
 
             pacing = model._test(inferenceModel, inputSample, inputFea)
-            print(f"{clr.H}[STEP 8.] Predicted pacing rate: {clr.G}{pacing}{clr.E}{clr.E}\n")
+            # print(f"{clr.H}[STEP 8.] Predicted pacing rate: {clr.G}{pacing}{clr.E}{clr.E}\n")
 
         except Exception as e:
             print(f"Exception error: {e}")
@@ -489,7 +489,7 @@ def main():
         ckpt = model._train(args, model, trainloader, testloader, optimizer, scheduler, lossFunction)
 
         inferenceModel = model._loadModel(fn, num_of_classes, inputFea)
-        
+
         inputSample, groundtruth = testdata[101]
         pacing = model._test(inferenceModel, inputSample, inputFea)
         print(f"Normalized Input Sample :\n{clr.G}{inputSample}{clr.E}")

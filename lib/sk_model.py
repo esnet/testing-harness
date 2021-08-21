@@ -112,7 +112,7 @@ class DATA:
 
     def _preprocessing(self, df, verbose=False):
         print("Started preprocessing ...")
-        
+
         """
         Step 1. spliting 1gbps -> 1, gbps
         Step 2. dropping rows with pacing rate 10.5, glitch in the training data
@@ -155,7 +155,7 @@ class DATA:
         df3 = df2.drop([1,4,8,16], axis=1)
 
         """
-        Normalization: This estimator scales and translates each feature individually 
+        Normalization: This estimator scales and translates each feature individually
         such that it is in the given range on the training set
         """
         totalColumnList = df3.columns
@@ -169,7 +169,7 @@ class DATA:
         df5 = pd.concat([df3[remainingColumnList], df4[columnListNorm]], axis=1)
         df5 = df5.astype('float64')
 
-        # Converting dataframe to nd.array 
+        # Converting dataframe to nd.array
         X_ = df5[df5.columns.values].values
         X = X_.astype('float64')
         num_of_classes = len(np.unique(y))
@@ -231,9 +231,9 @@ class PACINGCLASSIFIER:
     def _train (self, X_train, y_train, model, params, kfcv, verbose=False):
         # Model training on the retrieved statistics
         modelBest, bestparams = self._trainAndTune(X_train,
-                                                   y_train, 
-                                                   model, 
-                                                   params, 
+                                                   y_train,
+                                                   model,
+                                                   params,
                                                    kfcv,
                                                    verbose)
 
@@ -270,7 +270,7 @@ def getPacingRate(bufferData, phase='test', verbose=False):
         df = df.append({
                         'ALIAS':bufferData[0],
                         'STREAMS':bufferData[1],
-                        # This is just to replace N.A/missing value during 
+                        # This is just to replace N.A/missing value during
                         # appending it in the dataframe, eventually we'll predict this value
                         'PACING':"5gbit",
                         'THROUGHPUT-S':bufferData[2],
@@ -293,7 +293,6 @@ def getPacingRate(bufferData, phase='test', verbose=False):
     model_reloaded = pacingclassifier._loadModel (fn)
     # Apply testing sample/data
     pacing = pacingclassifier._test(model_reloaded, X[len(X)-1], len(X[len(X)-1]), le)
-    print(f"Predicted pacing rate: {clr.H}{pacing}{clr.E}")
 
     return pacing
 
@@ -304,7 +303,7 @@ def main():
 
     parser.add_argument('-p', '--phase', default="test", type=str,
                         help='Training and Testing Phase. {train/test}')
-    
+
     parser.add_argument('--infile', default="data/statistics-5.csv", type=str,
                         help='CSV file used for training the model.')
 
@@ -316,10 +315,10 @@ def main():
 
     parser.add_argument('-s', '--save', action='store_true',
                         help='To save the checkpoints of the training model')
-    
+
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='v flag prints all the steps results throughout the process')
-    
+
     parser.add_argument('--modelName', default="rf", type=str,
                         help="Optimizer {rf- Random Forest / dtr- decision tree regressor }")
 
@@ -337,10 +336,10 @@ def main():
     df = prep._df_load_and_clean(args.infile)
     X, y, num_of_classes, le = prep._preprocessing(df)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, 
+    X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                 test_size=0.33,
                                                 random_state=1)
-    
+
     pacingclassifier = PACINGCLASSIFIER(modelName=args.modelName)
     model, params = pacingclassifier._defineModel()
 
@@ -354,7 +353,7 @@ def main():
         # Apply testing sample/data
         pacingRate = pacingclassifier._test(model_reloaded, X_test[0], len(X_test[0]), le)
         print("Predicted pacing rate: ", pacingRate)
-    
+
     elif args.phase=="test":
         fn = "checkpoint/rfBest.pkl"
         # Reload the model
