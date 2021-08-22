@@ -429,11 +429,11 @@ class Job:
                 bufferData2 = [host, streams, throughput_s, throughput_r, min_rtt, max_rtt, mean_rtt, retransmits, cc_type, bytes_r]
 
                 print(f"{clr.H}[STEP 3.] Passing the Probe outcome to the Pace predictor{clr.E}\n")
-                pred1 = getPacingRate(bufferData1, phase='test')
+                pred1 = getPacingRate(bufferData1, phase='test', verbose=False)
                 pace1 = str(pred1)+"Gbit"
                 print("Pacing (model 1):", pace1)
 
-                pred2 = sk_model.getPacingRate(bufferData2, phase='test')
+                pred2 = sk_model.getPacingRate(bufferData2, phase='test', modelName='dtr', verbose=False)
                 pace2 = str(pred2)+"Gbit"
                 print("Pacing (model 2):", pace2)
 

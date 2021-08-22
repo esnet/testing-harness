@@ -28,6 +28,7 @@ import argparse
 # --- sklearn ---
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
+from sklearn.preprocessing import PolynomialFeatures
 
 # --- Sklearn ---
 from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
@@ -172,12 +173,14 @@ class DATA:
         # Converting dataframe to nd.array
         X_ = df5[df5.columns.values].values
         X = X_.astype('float64')
+        poly = PolynomialFeatures(degree=2, interaction_only=True)
+        X2 = poly.fit_transform(X)
         num_of_classes = len(np.unique(y))
 
         if verbose:
             print(df5.head())
 
-        return X, y, num_of_classes, le
+        return X2, y, num_of_classes, le
 
 
 # model definition
@@ -198,10 +201,12 @@ class PACINGCLASSIFIER:
         elif self.modelName=='dtr':
             model = tree.DecisionTreeRegressor(random_state=999)
             params = {
-                "criterion": ["mse", "friedman_mse", "mae", "poisson"],
-                "max_depth": [8,12,16],
-                "min_samples_split": [2,4,8,12,24,48],
+                "criterion": ["mse"],
+                "max_depth": [8,12,16,24],
+                "min_samples_split": [8,12,24,48,96],
+                "min_samples_leaf": [1,3,5],
                 "splitter": ["best", "random"],
+                "max_features": ["auto"],
             }
 
         return model, params
@@ -244,20 +249,21 @@ class PACINGCLASSIFIER:
         return modelBest
 
 
-    def _test (self, modelReloaded, inputSample, inputFeatureSize, le):
+    def _test (self, modelReloaded, inputSample, inputFeatureSize, le, groundtruth=None):
         output = None
         # Model testing on the retrieved statistics
-        if len(inputSample)==23 or len(inputSample)==24:
+        if len(inputSample)==23 or len(inputSample)==24 or len(inputSample)==277:
             pred = modelReloaded.predict(inputSample.reshape((1,inputFeatureSize)))
-            output = le.inverse_transform(pred)
+            output = le.inverse_transform([int(pred[0])])
+            output = round(output.item()+math.modf(pred[0])[0], 2)
         else:
-            pred = modelReloaded.predict(X_test)
-            acc = modelReloaded.score(X_test, y_test)
-            print("Testing accuracy: {acc:.2f}%")
-        return output.item()
+            pred = modelReloaded.predict(inputSample)
+            acc = modelReloaded.score(inputSample, groundtruth)
+            print(f"Testing accuracy: {100*acc:.2f}%")
+        return output
 
 
-def getPacingRate(bufferData, phase='test', verbose=False):
+def getPacingRate(bufferData, phase='test', modelName='dtr', verbose=False):
 
     seeder = SEEDEVERYTHING()
     seeder._weight_init_()
@@ -265,6 +271,10 @@ def getPacingRate(bufferData, phase='test', verbose=False):
     # Preprocessing
     prep = DATA("data/statistics-5.csv")
     df = prep._df_load_and_clean("data/statistics-5.csv")
+
+    if verbose:
+        print("Dataframe header ...")
+        print(df.head())
 
     if bufferData:
         df = df.append({
@@ -285,14 +295,15 @@ def getPacingRate(bufferData, phase='test', verbose=False):
 
     X, y, num_of_classes, le = prep._preprocessing(df)
 
-    pacingclassifier = PACINGCLASSIFIER(modelName='rf')
+    pacingclassifier = PACINGCLASSIFIER(modelName)
     model, params = pacingclassifier._defineModel()
 
-    fn = "checkpoint/rfBest.pkl"
+    fn = "checkpoint/"+str(modelName)+"Best.pkl"
     # Reload the model
     model_reloaded = pacingclassifier._loadModel (fn)
+
     # Apply testing sample/data
-    pacing = pacingclassifier._test(model_reloaded, X[len(X)-1], len(X[len(X)-1]), le)
+    pacing = pacingclassifier._test(model_reloaded, X[-1], len(X[-1]), le)
 
     return pacing
 
@@ -319,8 +330,8 @@ def main():
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='v flag prints all the steps results throughout the process')
 
-    parser.add_argument('--modelName', default="rf", type=str,
-                        help="Optimizer {rf- Random Forest / dtr- decision tree regressor }")
+    parser.add_argument('--modelName', default="dtr", type=str,
+                        help="Optimizer {rf - Random Forest, dtr - decision tree regressor}")
 
     args = parser.parse_args()
     print("")
@@ -337,29 +348,28 @@ def main():
     X, y, num_of_classes, le = prep._preprocessing(df)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y,
-                                                test_size=0.33,
-                                                random_state=1)
+                                                test_size=(args.split/100),
+                                                random_state=42)
 
     pacingclassifier = PACINGCLASSIFIER(modelName=args.modelName)
     model, params = pacingclassifier._defineModel()
 
+    fn = "checkpoint/"+str(args.modelName)+"Best.pkl"
+
     if args.phase=="train":
         trainedPacingModel = pacingclassifier._train(X_train, y_train, model, params, args.kv)
-        fn = "checkpoint/rfBest.pkl"
         # Save the model
         pacingclassifier._saveModel (fn, trainedPacingModel)
         # Reload the model
         model_reloaded = pacingclassifier._loadModel (fn)
         # Apply testing sample/data
-        pacingRate = pacingclassifier._test(model_reloaded, X_test[0], len(X_test[0]), le)
-        print("Predicted pacing rate: ", pacingRate)
+        pacingRate = pacingclassifier._test(model_reloaded, X_test, 999, le, y_test)
 
     elif args.phase=="test":
-        fn = "checkpoint/rfBest.pkl"
         # Reload the model
         model_reloaded = pacingclassifier._loadModel (fn)
         # Apply testing sample/data
-        pacingRate = pacingclassifier._test(model_reloaded, X_test[0], len(X_test[0]), le)
+        pacingRate = pacingclassifier._test(model_reloaded, X_test[0], X_test.shape[1], le)
         print(f"Predicted pacing rate: {clr.H}{pacingRate}{clr.E}")
 
 if __name__ == "__main__":
