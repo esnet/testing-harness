@@ -2,11 +2,11 @@
 
 This directory contains files for ESnet's Network Test Harness.
 
-Results can be sent to an Elastic server if desired.
+Results can be sent to an archiving stack (ELK) if desired. See https://github.com/esnet/archiving-sandbox
 
 This docker container has all tools needed (latest versions of ss and mpstat are required)
 ```
-https://hub.docker.com/r/bltierney/perfsonar-testpoint-bbrv2-testing
+https://hub.docker.com/repository/docker/dtnaas/perfsonar-testpoint
 ```
 
 ini: sample config files
@@ -43,21 +43,6 @@ $ python3 collect.py -j ini/iperf3.ini
 If you have a host running netem in your test path, you can specify netem sweep options in the .ini file.
 See ini/perfsonar-throughput-example.ini for options. Note that the harness expects to find a script
 /harness/utils/pre-netem.sh, and that you will likely need to customize that script for your setup. 
-
-
-### ELK Statistics Retrieval
-~~~
-$ python3 --term "*" --from-date "2021-05-01" --to-date "2021-06-30"
-~~~
-Ignore the flag `--to-date` if retrieving until the current date.
-The `log` file in INFO. mode and `csv` dataframe file is going to be generated automatically in the `/data` folder.
-
-## Plotting
-
-- ### Plotting retrieved statistics from ELK Stack (plot/retreival-plot.py)
-~~~
-python3 plot/retreival-plot.py -path "data/statistics-5.csv" --output "output"
-~~~
 
 - ### (plot/iperf3_raw_to_gnuplot.py)
 TBD
