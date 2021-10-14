@@ -124,10 +124,10 @@ def main():
                         obj = {"streams": dat["num_streams"],
                                "cc": cc,
                                "type": "both" if len(ccs) > 1 else cc,
-                               "ss_throughput": dat["throughput"],
+                               "ss_throughput": dat["throughput"] if "throughput" in dat else None,
                                "p50_rtt": int(dat["p50_rtt"]),
                                "retransmit_rate": dat[retrastr],
-                               "reorder_segs": dat[reordstr]}
+                               "reorder_segs": dat[reordstr] if reordstr in dat else None}
                         res[host].append(obj)
                         fnames[key].append(obj)
             f.close()
