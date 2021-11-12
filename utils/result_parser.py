@@ -98,11 +98,11 @@ def get_stats(dat):
             stats[time][3] += rtt
     return (round(stats[skey][1]/end, 3))
 
-def main():
+def parse_dir(rdir):
     fnames = defaultdict(list)
     res = defaultdict(list)
 
-    p = Path(sys.argv[1])
+    p = Path(rdir)
     files = list(p.glob('**/ss*.json'))
     for pf in files:
         key = os.path.join(pf.parent, pf.stem.split(":",1)[1])
@@ -135,7 +135,6 @@ def main():
     # go through iperf output to gather and validate additional info
     files = list(p.glob('**/src-cmd*'))
     out = list()
-    csvout = csv.writer(sys.stdout)
     for pf in files:
         key = os.path.join(pf.parent, pf.name.split(":",1)[1])
         host = pf.name.split(":")[1]
@@ -165,8 +164,20 @@ def main():
                             o["reorder_segs"],
                             o["p50_rtt"]))
             f.close()
-    #output
-    for r in sorted(out, key=lambda x: x[-1]):
+    return out
+
+def parse_file(fname):
+    with open(fname, 'r') as f:
+        data = f.read()
+    f.close()
+    return json.loads(data)
+
+def main():
+    ret = parse_dir(sys.argv[1])
+    print (json.dumps(ret))
+
+    csvout = csv.writer(sys.stdout)
+    for r in sorted(ret, key=lambda x: x[-1]):
         csvout.writerow(r)
 
 if __name__ == "__main__":
