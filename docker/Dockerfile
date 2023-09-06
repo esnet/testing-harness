@@ -4,13 +4,14 @@
 FROM perfsonar/testpoint:latest AS build
 WORKDIR /src
 
-ARG IP_RT2_VER=5.8.0
+ARG IP_RT2_VER=6.4.0
+#ARG IP_RT2_VER=5.8.0
 
 RUN yum -y install git wget
 RUN yum -y groupinstall "Development tools"
 
 # Get updated version of ss tool
-RUN wget https://git.kernel.org/pub/scm/network/iproute2/iproute2.git/snapshot/iproute2-${IP_RT2_VER}.tar.gz 
+RUN wget --no-check-certificate https://git.kernel.org/pub/scm/network/iproute2/iproute2.git/snapshot/iproute2-${IP_RT2_VER}.tar.gz 
 RUN tar xvzf iproute2-${IP_RT2_VER}.tar.gz; cd iproute2-${IP_RT2_VER}; ./configure && make DESTDIR=/usr/local -j4 && make DESTDIR=/usr/local install
 
 # Get updated verion of mpstat that support JSON output

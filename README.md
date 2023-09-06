@@ -17,7 +17,7 @@ plot: utilities needed to generate Gnuplot graphs
 
 Sample command to run a single test:
 ~~~
-$ ./collect.py -j ini/single.ini -o /var/log/bbr2 -H ini/test-hosts.csv 
+$ ./collect.py -j ini/single.ini -o /var/log/bbr3 
 ~~~
 
 Sample cron entry:

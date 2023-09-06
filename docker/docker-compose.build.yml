@@ -1,0 +1,8 @@
+version: "3.7"
+# to build, run: docker compose -f docker-compose.build.yml build
+services:
+  perfsonar:
+    image: bltierney/perfsonar-testpoint-bbrv3-testing:latest
+    build:
+      context: .
+      dockerfile: Dockerfile

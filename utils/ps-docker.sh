@@ -9,9 +9,9 @@ ssh_sock=$SSH_AUTH_SOCK
 
 if [ -z "$container_id" ]; then
    echo "Setting-up new container..."
-   docker run -d --name perfsonar --privileged --net=host -v /var/log/bbr2-testing:/var/log/bbr2 dtnaas/perfsonar-testpoint:latest
+   #docker run -d --name perfsonar --privileged --net=host -v /var/log/bbr3-testing:/var/log/bbr3 bltierney/perfsonar-testpoint-bbrv3-testing:latest
    # to bind to a specific set of CPUs, useful for 100G testing
-   #docker run -d --name perfsonar --privileged --net=host --cpuset-cpus="12,13,14,15,16,17" -v /var/log/bbr2-testing:/var/log/bbr2 dtnaas/perfsonar-testpoint:latest
+   docker run -d --name perfsonar --privileged --net=host --cpuset-cpus="28,29,30,31" -v /var/log/bbr3-testing:/var/log/bbr3 bltierney/perfsonar-testpoint-bbrv3-testing:latest
    container_id=$(docker ps --no-trunc | grep "perfsonar" | awk '{print $1}')
    sleep 3
 else
