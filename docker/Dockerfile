@@ -2,6 +2,8 @@
 
 # Build in temporary image
 FROM perfsonar/testpoint:latest AS build
+# systemd version not working??
+#FROM perfsonar/testpoint:v4.4.4-systemd AS build
 WORKDIR /src
 
 ARG IP_RT2_VER=6.4.0
@@ -25,6 +27,7 @@ RUN cd iperf3-bbr-testing && ./configure --enable-static --disable-shared && mak
 
 # Now build final perfSONAR extended image
 FROM perfsonar/testpoint:latest
+#FROM perfsonar/testpoint:v4.4.4-systemd
 WORKDIR /src
 
 RUN yum -y install git wget tcsh

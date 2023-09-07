@@ -1,0 +1,22 @@
+
+# useful commands:
+# docker compose -f docker-compose.yml build
+# docker compose -f docker-compose.yml up -d
+# docker compose -f docker-compose.yml exec testpoint bash
+# docker compose down
+
+version: '3.8'
+services:
+  testpoint:
+    #image: perfsonar/testpoint:latest
+    image: bltierney/perfsonar-testpoint-bbrv3-testing:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    network_mode: "host"
+    privileged: true
+    restart: on-failure
+    volumes:
+       - ./compose/psconfig:/etc/perfsonar/psconfig
+       - /data:/data
+    cpuset: "28,29,30,31"

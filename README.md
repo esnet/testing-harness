@@ -1,17 +1,32 @@
 # ESnet Network Test Harness
 
-This directory contains files for ESnet's Network Test Harness.
+This directory contains a customized version of ESnet's Network Test Harness for testing BBRv3.
 
-Results can be sent to an archiving stack (ELK) if desired. See https://github.com/esnet/archiving-sandbox
+Eventually this branch should probably be merged into the master branch.
+
 
 This docker container has all tools needed (latest versions of ss and mpstat are required)
 ```
-https://hub.docker.com/repository/docker/dtnaas/perfsonar-testpoint
+see: https://hub.docker.com/r/bltierney/perfsonar-testpoint-bbrv3-testing
 ```
 
+# Docker container
+
+The easiest way to use this test harness is via docker. Useful docker commands inslude:
+```
+ docker compose -f docker-compose.yml build
+ docker compose -f docker-compose.yml up -d
+ docker compose -f docker-compose.yml exec testpoint bash
+ docker compose down
+```
+
+
+# Directories
+```
 ini: sample config files
 lib: python code for each of the harness modules
 plot: utilities needed to generate Gnuplot graphs
+```
 
 ## Example execution
 
