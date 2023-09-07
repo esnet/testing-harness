@@ -19,8 +19,9 @@ RUN git clone https://github.com/sysstat/sysstat.git
 RUN cd sysstat && ./configure --prefix=/usr/local && make -j4 && make install
 
 # Get iperf3 version that does different congestion control on even/odd numbered streams
-RUN git clone -b bbr2-testing https://github.com/esnet/iperf.git
-RUN cd iperf && ./configure --enable-static --disable-shared && make -j4
+#RUN git clone -b bbr2-testing https://github.com/esnet/iperf.git
+RUN git clone -b mt https://github.com/bltierney/iperf3-bbr-testing.git
+RUN cd iperf3-bbr-testing && ./configure --enable-static --disable-shared && make -j4
 
 # Now build final perfSONAR extended image
 FROM perfsonar/testpoint:latest
@@ -30,7 +31,7 @@ RUN yum -y install git wget tcsh
 
 # Move over binaries and configuratioon from build image
 COPY --from=build /usr/local/ /usr/local/
-COPY --from=build /src/iperf/src/iperf3 /usr/bin/iperf3-cc-hack
+COPY --from=build /src/iperf3-bbr-testing/src/iperf3 /usr/bin/iperf3-cc-hack
 
 # Create a symlink iperf3-dist for clarity
 RUN ln -s /usr/bin/iperf3 /usr/bin/iperf3-dist
@@ -39,6 +40,9 @@ RUN ln -s /usr/bin/iperf3 /usr/bin/iperf3-dist
 RUN mv /usr/sbin/tcpdump /usr/bin/tcpdump; ln -s /usr/bin/tcpdump /usr/sbin/tcpdump
 
 # Get and configure testing harness
-RUN git clone https://github.com/esnet/testing-harness.git
+RUN git clone -b bbr3-testing https://github.com/esnet/testing-harness.git
 RUN cd testing-harness && pip3 install .
 RUN ln -s /src/testing-harness/ /harness
+
+# share with host OS
+VOLUME /data

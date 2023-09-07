@@ -67,7 +67,7 @@ class Job:
         self.pre_dst_cmd = cfg.get('pre-dst-cmd', None)
         self.post_src_cmd = cfg.get('post-src-cmd', None)
         self.post_dst_cmd = cfg.get('post-dst-cmd', None)
-        self.ss = cfg.getboolean('ss', True)
+        self.ss = cfg.getboolean('ss', False)
         self.tcptrace = cfg.getboolean('tcptrace', False)
         self.tcpdump = cfg.getboolean('tcpdump', False)
         self.tcpdump_filt = cfg.get('tcpdump-filt', None)
