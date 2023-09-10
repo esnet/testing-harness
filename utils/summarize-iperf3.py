@@ -56,14 +56,15 @@ for root, dirs, files in os.walk(directory_path):
 # Create headers for the average throughput table
 avg_headers = ["Dest Host", "Streams", "CC Alg", "Pacing (Gbps)", "Throughput (Gbps)", "Retransmits"]
 
-# Calculate and print the averages for each combination of dest_host, nstreams, cong, fq_rate
+# Calculate and format the averages for each combination of dest_host, nstreams, cong, fq_rate
 average_table_data = []
 
 for key, values in average_throughput.items():
     avg_throughput = sum(values[0]) / len(values[0])
     avg_retransmits = sum(values[1]) / len(values[1])
     dest_host, nstreams, cong, fq_rate = key
-    average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput, int(avg_retransmits)])
+    avg_throughput_formatted = "{:.2f}".format(avg_throughput)  # Format throughput to "%.2f"
+    average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput_formatted, int(avg_retransmits)])
 
 # Sort the data by columns: dest_host, nstreams, and cong
 average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[1], x[3]))
@@ -98,4 +99,5 @@ data = sorted(data, key=lambda x: (x[0], x[1], x[3], x[2]))
 # Print the main data table
 print("\nResults from each individual test:")
 print(tabulate(data, headers=data_headers, tablefmt="grid"))
+
 
