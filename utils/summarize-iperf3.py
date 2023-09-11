@@ -6,6 +6,7 @@ import os
 import json
 import sys
 from tabulate import tabulate  # Make sure to install tabulate: pip install tabulate
+import statistics
 
 # Specify the directory to start the search from
 directory_path = "."
@@ -54,17 +55,20 @@ for root, dirs, files in os.walk(directory_path):
             data.append([dest_host, nstreams, cong, fq_rate, gbits_per_second, retransmits])
 
 # Create headers for the average throughput table
-avg_headers = ["Dest Host", "Streams", "CC Alg", "Pacing (Gbps)", "Throughput (Gbps)", "Retransmits"]
+avg_headers = ["Dest Host", "Streams", "CC Alg", "Pacing (Gbps)", "Throughput (Gbps)", "Stddev", "Retransmits"]
 
-# Calculate and format the averages for each combination of dest_host, nstreams, cong, fq_rate
+# Calculate and format the averages and standard deviation for each combination of dest_host, nstreams, cong, fq_rate
 average_table_data = []
 
 for key, values in average_throughput.items():
     avg_throughput = sum(values[0]) / len(values[0])
     avg_retransmits = sum(values[1]) / len(values[1])
+    throughput_values = values[0]  # List of throughput values
+    std_dev_throughput = statistics.stdev(throughput_values)  # Calculate stddev
     dest_host, nstreams, cong, fq_rate = key
-    avg_throughput_formatted = "{:.2f}".format(avg_throughput)  # Format throughput to "%.2f"
-    average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput_formatted, int(avg_retransmits)])
+    avg_throughput_formatted = "{:.2f}".format(avg_throughput)
+    std_dev_throughput_formatted = "{:.2f}".format(std_dev_throughput)  # Format stddev
+    average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted, int(avg_retransmits)])
 
 # Sort the data by columns: dest_host, nstreams, and cong
 average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[1], x[3]))
@@ -75,7 +79,7 @@ formatted_average_table_data = []
 # Iterate through the average_table_data and add separators
 prev_dest_host = None
 for row in average_table_data:
-    dest_host, nstreams, cong, fq_rate, avg_throughput, avg_retransmits = row
+    dest_host, nstreams, cong, fq_rate, avg_throughput, stddev_throughput, avg_retransmits = row
 
     # Check if dest_host is different from the previous row
     if dest_host != prev_dest_host:
