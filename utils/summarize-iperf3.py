@@ -39,8 +39,9 @@ for root, dirs, files in os.walk(directory_path):
                     print("JSON load error. Not a JSON file?")
                     sys.exit(-1)
 
+            #print ("Getting data from file: ", file_path)
             # Extract bits_per_second and retransmits from sum_sent
-            dest_host = json_data["diags"]["start"]["connecting_to"]["host"]
+            dest_host = json_data["start"]["connecting_to"]["host"]
             nstreams = json_data["start"]["test_start"]["num_streams"]
             fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
             cong = json_data["end"]["sender_tcp_congestion"]
@@ -71,7 +72,11 @@ for key, values in average_throughput.items():
     avg_throughput = sum(values[0]) / len(values[0])
     avg_retransmits = sum(values[1]) / len(values[1])
     throughput_values = values[0]  # List of throughput values
-    std_dev_throughput = statistics.stdev(throughput_values)  # Calculate stddev
+    try:
+        std_dev_throughput = statistics.stdev(throughput_values)  # Calculate stddev
+    except:
+        print ("Error computing stdev for host ", key)
+        std_dev_throughput = 0
     dest_host, nstreams, cong, fq_rate = key
     avg_throughput_formatted = "{:.2f}".format(avg_throughput)
     std_dev_throughput_formatted = "{:.2f}".format(std_dev_throughput)  # Format stddev
