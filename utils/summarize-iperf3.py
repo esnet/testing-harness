@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-#
-# Summarize results of iperf3 testing .json files collected by testing_harness
 
 import os
 import json
 import sys
-from tabulate import tabulate  # Make sure to install tabulate: pip install tabulate
+import argparse
 import statistics
+from tabulate import tabulate
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Summarize results of iperf3 testing .json files")
+parser.add_argument("-j", "--json-check", action="store_true", help="Check for .json file extension")
+args = parser.parse_args()
 
 # Specify the directory to start the search from
 directory_path = "."
@@ -23,8 +27,11 @@ for root, dirs, files in os.walk(directory_path):
         if filename.startswith("src-cmd"):
             file_path = os.path.join(root, filename)
 
+            # Check the filename extension if the -j flag is provided
+            if args.json_check and not filename.endswith(".json"):
+                continue  # Skip non-.json files
+
             # Open and load the JSON file
-            #print("Reading file:", file_path)
             with open(file_path, "r") as json_file:
                 try:
                     json_data = json.load(json_file)
@@ -33,7 +40,7 @@ for root, dirs, files in os.walk(directory_path):
                     sys.exit(-1)
 
             # Extract bits_per_second and retransmits from sum_sent
-            dest_host = json_data["start"]["connecting_to"]["host"]
+            dest_host = json_data["diags"]["start"]["connecting_to"]["host"]
             nstreams = json_data["start"]["test_start"]["num_streams"]
             fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
             cong = json_data["end"]["sender_tcp_congestion"]
