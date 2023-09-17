@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-#
-# Summarize results of iperf3 testing .json files collected by testing_harness
 
 import os
 import json
 import sys
-from tabulate import tabulate  # Make sure to install tabulate: pip install tabulate
+import argparse
 import statistics
+from tabulate import tabulate
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Summarize results of iperf3 testing .json files")
+parser.add_argument("-j", "--json-check", action="store_true", help="Check for .json file extension")
+args = parser.parse_args()
 
 # Specify the directory to start the search from
 directory_path = "."
@@ -23,8 +27,11 @@ for root, dirs, files in os.walk(directory_path):
         if filename.startswith("src-cmd"):
             file_path = os.path.join(root, filename)
 
+            # Check the filename extension if the -j flag is provided
+            if args.json_check and not filename.endswith(".json"):
+                continue  # Skip non-.json files
+
             # Open and load the JSON file
-            #print("Reading file:", file_path)
             with open(file_path, "r") as json_file:
                 try:
                     json_data = json.load(json_file)
@@ -32,6 +39,7 @@ for root, dirs, files in os.walk(directory_path):
                     print("JSON load error. Not a JSON file?")
                     sys.exit(-1)
 
+            #print ("Getting data from file: ", file_path)
             # Extract bits_per_second and retransmits from sum_sent
             dest_host = json_data["start"]["connecting_to"]["host"]
             nstreams = json_data["start"]["test_start"]["num_streams"]
@@ -64,7 +72,11 @@ for key, values in average_throughput.items():
     avg_throughput = sum(values[0]) / len(values[0])
     avg_retransmits = sum(values[1]) / len(values[1])
     throughput_values = values[0]  # List of throughput values
-    std_dev_throughput = statistics.stdev(throughput_values)  # Calculate stddev
+    try:
+        std_dev_throughput = statistics.stdev(throughput_values)  # Calculate stddev
+    except:
+        print ("Error computing stdev for host ", key)
+        std_dev_throughput = 0
     dest_host, nstreams, cong, fq_rate = key
     avg_throughput_formatted = "{:.2f}".format(avg_throughput)
     std_dev_throughput_formatted = "{:.2f}".format(std_dev_throughput)  # Format stddev

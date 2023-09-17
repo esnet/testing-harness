@@ -195,7 +195,7 @@ class Job:
                 p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
             except subprocess.CalledProcessError as err:
                 print('ERROR setting pacing :', err)
-            log.debug(f"pacing set")
+            log.info(f"pacing set to %s" % self.pacing)
         else:
             if self.nic : # clear any pacing setting if nic is set but pacing is not set
                 of = os.path.join(self.outdir, "pacing.out")
