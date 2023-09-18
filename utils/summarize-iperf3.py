@@ -5,6 +5,7 @@ import json
 import sys
 import argparse
 import statistics
+import re
 from tabulate import tabulate
 
 # Parse command-line arguments
@@ -20,10 +21,31 @@ data = []
 
 # Create a nested dictionary to store and calculate the average throughput and retransmits
 average_throughput = {}
+pacing_string = ""
 
 # Traverse all directories and files recursively
 for root, dirs, files in os.walk(directory_path):
+    if root != "." or dirs == []:
+           pacing_string = ""
+           if args.json_check:
+              # first check jobmeta.json file for pacing for set of tests in this dir
+               file_path = os.path.join(root, "jobmeta.json")
+               with open(file_path, "r") as json_file:
+                   try:
+                     json_data = json.load(json_file)
+                   except:
+                     print("JSON load error. Not a JSON file?", file_path)
+                     sys.exit(-1)
+               pacing_string = json_data["pacing"]
+               if pacing_string:
+                   pacing_int = int(re.search(r'\d+', pacing_string).group())
+#                   print ("Pacing set to: ", pacing_int)
+               else:
+                   pacing_int = 0
+
     for filename in files:
+        #print ("Processing file: ", root, filename)
+
         if filename.startswith("src-cmd"):
             file_path = os.path.join(root, filename)
 
@@ -36,8 +58,10 @@ for root, dirs, files in os.walk(directory_path):
                 try:
                     json_data = json.load(json_file)
                 except:
-                    print("JSON load error. Not a JSON file?")
-                    sys.exit(-1)
+                    print("JSON load error. Not a JSON file?", file_path)
+                    #sys.exit(-1)
+                    # just continue on error: sometimes files are corrupt
+                    continue
 
             #print ("Getting data from file: ", file_path)
             # Extract bits_per_second and retransmits from sum_sent
@@ -50,6 +74,10 @@ for root, dirs, files in os.walk(directory_path):
             retransmits = json_data["end"]["sum_sent"]["retransmits"]
 
             # Create a key for the nested dictionary based on dest_host, nstreams, cong, and fq_rate
+            if pacing_string:  # pscheduler still does not support fq_rate, so grab it from the testing_harness jobmeta file
+               fq_rate = float(pacing_int)
+#               print (" setting fq_rate based on jobmeta pacing rate: ",fq_rate)
+
             key = (dest_host, nstreams, cong, fq_rate)
 
             # Add the throughput and retransmits to the nested dictionary
@@ -63,7 +91,7 @@ for root, dirs, files in os.walk(directory_path):
             data.append([dest_host, nstreams, cong, fq_rate, gbits_per_second, retransmits])
 
 # Create headers for the average throughput table
-avg_headers = ["Dest Host", "Streams", "CC Alg", "Pacing (Gbps)", "Throughput (Gbps)", "Stddev", "Retransmits"]
+avg_headers = ["Dest Host", "Streams", "CC Alg", "Pacing (Gbps)", "Tput (Gbps)", "Stddev (nvals)", "RXMT"]
 
 # Calculate and format the averages and standard deviation for each combination of dest_host, nstreams, cong, fq_rate
 average_table_data = []
@@ -72,15 +100,17 @@ for key, values in average_throughput.items():
     avg_throughput = sum(values[0]) / len(values[0])
     avg_retransmits = sum(values[1]) / len(values[1])
     throughput_values = values[0]  # List of throughput values
+    data_points = len(throughput_values)  # Number of data points
     try:
         std_dev_throughput = statistics.stdev(throughput_values)  # Calculate stddev
     except:
-        print ("Error computing stdev for host ", key)
+        print ("Error computing stdev for host ", key, throughput_values)
         std_dev_throughput = 0
     dest_host, nstreams, cong, fq_rate = key
     avg_throughput_formatted = "{:.2f}".format(avg_throughput)
     std_dev_throughput_formatted = "{:.2f}".format(std_dev_throughput)  # Format stddev
-    average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted, int(avg_retransmits)])
+    #average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted, int(avg_retransmits)])
+    average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted + " ({})".format(data_points), int(avg_retransmits)])
 
 # Sort the data by columns: dest_host, nstreams, and cong
 average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[1], x[3]))
