@@ -217,19 +217,22 @@ class Job:
                 "rtt": 0
             }
             # Ping the host and get the RTT (in seconds)
-            rtt = ping(host)
+
+            log.debug ("Testing ping to host: ", host['hostname'])
+            rtt = ping(host['hostname'])
 
             if rtt is not None:
                 rtt_ms = rtt * 1000  # Convert RTT to milliseconds
-                print(f"RTT to {host}: {rtt_ms:.2f} ms")
+                log.info(f"RTT to {host['hostname']}: {rtt_ms:.1f} ms")
             else:
-                print(f"ping to {host} failed. skipping this host")
+                log.info(f"ping to {host['hostname']} failed. skipping this host")
                 rtt_ms = 0
-                continue
+            # store RTT in the host dict
+            host['rtt'] = int(rtt_ms)
 
             md.update(host)
             md.update({"profile_settings": self.profile_manager.get_profile(host)})
-            md.update({"rtt":rtt_ms})
+            md.update({"rtt":int(rtt_ms)})
             return md
 
         def create_meta_job():
@@ -407,13 +410,16 @@ class Job:
             log.info(f"Testing to {dst} using \"{cmd}\"")
 
             #first ping the host to make sure its up
-            # old way
+            # old way, now using ping3 lib, and storing result in hostname-meta.json
             #png = f'ping -W 5 -c 2 {dst} > /dev/null'
             #status = os.system(png)
             #if status: # ping failed, skip
             #    log.info(f"Error: ping to {dst} failed, error code: \"{status}\"")
             #    continue
-            print ("in Run, _export_md = ", self._export_md)
+
+            if item['rtt'] == 0:
+                 # ping must have failed, so skip this host
+                 continue
 
             for iter in range(1, int(self.iters)+1):
                 log.debug(f"Starting iteration # {iter} for host {dst}")
