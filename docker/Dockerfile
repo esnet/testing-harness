@@ -30,7 +30,7 @@ FROM perfsonar/testpoint:latest
 #FROM perfsonar/testpoint:v4.4.4-systemd
 WORKDIR /src
 
-RUN yum -y install git wget tcsh
+RUN yum -y install git wget tcsh ethtool
 
 # Move over binaries and configuratioon from build image
 COPY --from=build /usr/local/ /usr/local/
