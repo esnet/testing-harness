@@ -476,6 +476,7 @@ class Job:
                     self.param_sweep_loop (dst, cmd, iter, self.lat, self.limit)
                 else:
                     ofname_suffix = f"{dst}:{iter}"
+                    log.info (f"%s: Running iteration %d of command %s" % (dst, iter, cmd))
                     self.subrun(dst, cmd, iter, ofname_suffix)
             # reset any profiles that were set as part of option handling
             self.profile_manager.clear_profile(item)
@@ -546,7 +547,7 @@ class Job:
             jthreads.append(th)
             th.start()
 
-        # wait for a bit
+        # wait for a bit more
         time.sleep(5)
 
         # finally, start and wait on src cmd (will block)
@@ -563,6 +564,7 @@ class Job:
               log.debug("size of results file %s is %d" % (ofname, os.path.getsize(ofname)))
               if os.path.getsize(ofname) > 1000 or cnt > 4:
                  done = True
+                 log.info ("Test Completed Sucessfully...")
               else:
                  log.info ("Test failed, trying again...")
                  cnt += 1
