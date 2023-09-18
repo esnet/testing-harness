@@ -9,7 +9,7 @@ WORKDIR /src
 ARG IP_RT2_VER=6.4.0
 #ARG IP_RT2_VER=5.8.0
 
-RUN yum -y install git wget
+RUN yum -y install git wget tcsh ethtool
 RUN yum -y groupinstall "Development tools"
 
 # Get updated version of ss tool
@@ -45,6 +45,7 @@ RUN mv /usr/sbin/tcpdump /usr/bin/tcpdump; ln -s /usr/bin/tcpdump /usr/sbin/tcpd
 # Get and configure testing harness
 RUN git clone -b bbr3-testing https://github.com/esnet/testing-harness.git
 RUN cd testing-harness && pip3 install .
+RUN pip3 install ping3
 RUN ln -s /src/testing-harness/ /harness
 
 # share with host OS
