@@ -225,7 +225,7 @@ class Job:
                 rtt_ms = rtt * 1000  # Convert RTT to milliseconds
                 log.info(f"RTT to {host['hostname']}: {rtt_ms:.1f} ms")
             else:
-                log.info(f"ping to {host['hostname']} failed. skipping this host")
+                log.info(f"ping to {host['hostname']} FAILED. skipping this host")
                 rtt_ms = 0
             # store RTT in the host dict
             host['rtt'] = int(rtt_ms)
@@ -476,7 +476,6 @@ class Job:
                     self.param_sweep_loop (dst, cmd, iter, self.lat, self.limit)
                 else:
                     ofname_suffix = f"{dst}:{iter}"
-                    log.info (f"%s: Running iteration %d of command %s" % (dst, iter, cmd))
                     self.subrun(dst, cmd, iter, ofname_suffix)
             # reset any profiles that were set as part of option handling
             self.profile_manager.clear_profile(item)
@@ -555,18 +554,30 @@ class Job:
            done = False
            cnt = 0
            while not done: # try up to 4 times for sucessful run
-              log.debug ("Starting test...")
+              log.info (f"Running iteration {iter}/{self.iters}, command: {cmd}")
+
               ofname = os.path.join(self.outdir, f"src-cmd:{ofname_suffix}")
               th = Thread(target=self._run_host_cmd,
                                 args=(self.src, cmd, ofname, None))
               th.start()
               th.join()
               log.debug("size of results file %s is %d" % (ofname, os.path.getsize(ofname)))
-              if os.path.getsize(ofname) > 1000 or cnt > 4:
+              if os.path.getsize(ofname) > 1000 :
                  done = True
-                 log.info ("Test Completed Sucessfully...")
+                 log.info (f"Test {iter} attempt {cnt} to host {dst} completed sucessfully...")
+              elif cnt > 4:
+                 done = True
+                 log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED. Giving up ...")
               else:
-                 log.info ("Test failed, trying again...")
+                 log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED, trying again...")
+                 try:
+                     with open(ofname, "r") as file:
+                         file_contents = file.read()
+                         log.info(f"job output file contains: {file_contents}")
+                 except:
+                     log.error(f"output file '{ofname}' not found.")
+
+                 time.sleep(2)
                  cnt += 1
 
         # invoke a callback with some context
