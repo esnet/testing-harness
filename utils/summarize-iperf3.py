@@ -30,12 +30,12 @@ for root, dirs, files in os.walk(directory_path):
            if args.json_check:
               # first check jobmeta.json file for pacing for set of tests in this dir
                file_path = os.path.join(root, "jobmeta.json")
-               with open(file_path, "r") as json_file:
-                   try:
-                     json_data = json.load(json_file)
-                   except:
-                     print("JSON load error. Not a JSON file?", file_path)
-                     sys.exit(-1)
+               try:
+                   with open(file_path, "r") as json_file:
+                      json_data = json.load(json_file)
+               except:
+                   print("JSON jobmeta error. Not a JSON file?", file_path)
+                   continue
                pacing_string = json_data["pacing"]
                if pacing_string:
                    pacing_int = int(re.search(r'\d+', pacing_string).group())
@@ -48,6 +48,12 @@ for root, dirs, files in os.walk(directory_path):
 
         if filename.startswith("src-cmd"):
             file_path = os.path.join(root, filename)
+            parts = filename.split(":")
+            host_meta = os.path.join(root,parts[1] + "-meta.json")
+            with open(host_meta, "r") as json_file:
+                 json_data = json.load(json_file)
+                 rtt = json_data["rtt"]
+                 #print(f"Got RTT of %d from meta file %s" % (rtt, host_meta))
 
             # Check the filename extension if the -j flag is provided
             if args.json_check and not filename.endswith(".json"):
@@ -65,7 +71,7 @@ for root, dirs, files in os.walk(directory_path):
 
             #print ("Getting data from file: ", file_path)
             # Extract bits_per_second and retransmits from sum_sent
-            dest_host = json_data["start"]["connecting_to"]["host"]
+            dest_host = json_data["start"]["connecting_to"]["host"] + f" ({rtt} ms)"
             nstreams = json_data["start"]["test_start"]["num_streams"]
             fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
             cong = json_data["end"]["sender_tcp_congestion"]
@@ -91,7 +97,7 @@ for root, dirs, files in os.walk(directory_path):
             data.append([dest_host, nstreams, cong, fq_rate, gbits_per_second, retransmits])
 
 # Create headers for the average throughput table
-avg_headers = ["Dest Host", "Streams", "CC Alg", "Pacing (Gbps)", "Tput (Gbps)", "Stddev (nvals)", "RXMT"]
+avg_headers = ["Dest Host (RTT)", "Streams", "CC Alg", "Pacing (Gbps)", "Tput (Gbps)", "Stddev (nvals)", "RXMT"]
 
 # Calculate and format the averages and standard deviation for each combination of dest_host, nstreams, cong, fq_rate
 average_table_data = []
