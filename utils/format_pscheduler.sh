@@ -6,7 +6,8 @@
 # for this purpose, we only need the Sender (Participant 0)
 
 # Define the awk command to run
-awk_command='awk '\''{gsub(/\\n/, "\n"); gsub(/\\\"/, "\"");}1'\'''
+awk_command='awk '\''{gsub(/\\n/, "\n"); gsub(/\\"/, "\"");}1'\'''
+
 awk_command2='awk '\''BEGIN { count = 0 } /{/ { count++; if (count == 2) { printing = 1 } } printing { print }'\'''
 
 tmp_file="tmp.out"
