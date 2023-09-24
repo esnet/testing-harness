@@ -77,10 +77,14 @@ for root, dirs, files in os.walk(directory_path):
 
             #print ("Getting data from file: ", file_path)
             # Extract bits_per_second and retransmits from sum_sent
-            dest_host = json_data["start"]["connecting_to"]["host"] + f" ({rtt} ms)"
-            nstreams = json_data["start"]["test_start"]["num_streams"]
-            fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
-            cong = json_data["end"]["sender_tcp_congestion"]
+            try:
+                dest_host = json_data["start"]["connecting_to"]["host"] + f" ({rtt} ms)"
+                nstreams = json_data["start"]["test_start"]["num_streams"]
+                fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
+                cong = json_data["end"]["sender_tcp_congestion"]
+            except:
+                print ("Error extracting dest_host from JSON file: ", file_path)
+                continue
 
             gbits_per_second = float(json_data["end"]["sum_sent"]["bits_per_second"]) / 1000000000
             retransmits = json_data["end"]["sum_sent"]["retransmits"]
