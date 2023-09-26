@@ -22,5 +22,5 @@ setup(
 
     packages=find_packages(),
 
-    install_requires=['requests', 'pyyaml', 'pika', 'ping3', 'tabulate']
+    install_requires=['requests', 'pyyaml', 'pika', 'ping3', 'tabulate', 'pptx']
 )
