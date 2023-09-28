@@ -23,6 +23,9 @@ parser.add_argument("-f", "--full-results", action="store_true", help="show full
 parser.add_argument("-o", "--output-pptx", help="Specify the output PowerPoint file")
 args = parser.parse_args()
 
+# add as a flag
+VERBOSE = 0
+
 # Specify the directory to start the search from
 directory_path = "."
 
@@ -140,21 +143,30 @@ for root, dirs, files in os.walk(directory_path):
 
     json_file_cnt = 0
     for filename in files:
+
         #print ("Processing file: ", root, filename)
-
         if filename.startswith("src-cmd"):
-            file_path = os.path.join(root, filename)
-            parts = filename.split(":")
-            host_meta = os.path.join(root,parts[1] + "-meta.json")
-            with open(host_meta, "r") as json_file:
-                 json_data = json.load(json_file)
-                 rtt = json_data["rtt"]
-                 #print(f"Got RTT of %d from meta file %s" % (rtt, host_meta))
+            # get RTT from meta file if found
+            if re.match(r'src-cmd.*:\d+$', filename):
+                file_path = os.path.join(root, filename)
+                parts = filename.split(":")
+                host_meta = os.path.join(root,parts[1] + "-meta.json")
+                try:
+                    with open(host_meta, "r") as json_file:
+                         json_data = json.load(json_file)
+                         rtt = json_data["rtt"]
+                         #print(f"Got RTT of %d from meta file %s" % (rtt, host_meta))
+                except:
+                    print("Error getting RTT from file: ", host_meta)
+                    rtt = 0
 
-            # Check the filename extension if the -j flag is provided
             if not args.iperf3_json and not filename.endswith(".json"):
+                if VERBOSE:
+                     print ("    Skipping file: ", filename)
                 continue  # Skip non-.json files
 
+            if VERBOSE:
+                print ("Processing file: ", root, filename)
             # Open and load the JSON file
             with open(file_path, "r") as json_file:
                 try:
@@ -173,7 +185,9 @@ for root, dirs, files in os.walk(directory_path):
                 fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
                 cong = json_data["end"]["sender_tcp_congestion"]
             except:
-                print ("Error extracting dest_host from JSON file: ", file_path)
+                # test most have failed
+                if VERBOSE:
+                    print ("Error extracting dest_host from JSON file: ", file_path)
                 continue
 
             gbits_per_second = float(json_data["end"]["sum_sent"]["bits_per_second"]) / 1000000000
@@ -215,7 +229,8 @@ for key, values in average_throughput.items():
     try:
         std_dev_throughput = statistics.stdev(throughput_values)  # Calculate stddev
     except:
-        print ("Error computing stdev for host ", key, throughput_values)
+        if VERBOSE:
+            print ("Error computing stdev for host ", key, throughput_values)
         std_dev_throughput = 0
     dest_host, rtt, nstreams, cong, fq_rate = key
     avg_throughput_formatted = "{:.2f}".format(avg_throughput)
