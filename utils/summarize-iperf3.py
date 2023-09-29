@@ -11,10 +11,10 @@ import argparse
 import statistics
 import re
 from tabulate import tabulate
-from pptx import Presentation
-from pptx.util import Inches
-from pptx.enum.text import PP_ALIGN
-from pptx.dml.color import RGBColor
+#from pptx import Presentation
+#from pptx.util import Inches
+#from pptx.enum.text import PP_ALIGN
+#from pptx.dml.color import RGBColor
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description="Summarize results of pscheduler testing .json files")
@@ -125,96 +125,98 @@ def create_pptx(data, avg_headers):
 # Traverse all directories and files recursively
 for root, dirs, files in os.walk(directory_path):
     if root != "." or dirs == []:
-           pacing_string = ""
-           if not args.iperf3_json:
-              # first check jobmeta.json file for pacing for set of tests in this dir
-               file_path = os.path.join(root, "jobmeta.json")
-               try:
-                   with open(file_path, "r") as json_file:
-                      json_data = json.load(json_file)
-               except:
-                   print("JSON jobmeta error. Not a JSON file?", file_path)
-                   continue
-               pacing_string = json_data["pacing"]
-               if pacing_string:
-                   pacing_int = int(re.search(r'\d+', pacing_string).group())
+        pacing_string = ""
+        if not args.iperf3_json:
+           # first check jobmeta.json file for pacing for set of tests in this dir
+            file_path = os.path.join(root, "jobmeta.json")
+            try:
+                with open(file_path, "r") as json_file:
+                    json_data = json.load(json_file)
+            except:
+                print("JSON jobmeta error. Not a JSON file?", file_path)
+                continue
+            pacing_string = json_data["pacing"]
+            if pacing_string:
+                pacing_int = int(re.search(r'\d+', pacing_string).group())
 #                   print ("Pacing set to: ", pacing_int)
-               else:
-                   pacing_int = 0
+            else:
+                pacing_int = 0
 
     json_file_cnt = 0
     for filename in files:
 
         #print ("Processing file: ", root, filename)
         file_path = os.path.join(root, filename)
-        if filename.startswith("src-cmd"):
-            # get RTT from meta file if found
-            if re.match(r'src-cmd.*:\d+$', filename):
-                parts = filename.split(":")
-                host_meta = os.path.join(root,parts[1] + "-meta.json")
-                try:
-                    with open(host_meta, "r") as json_file:
-                         json_data = json.load(json_file)
-                         rtt = json_data["rtt"]
-                         #print(f"Got RTT of %d from meta file %s" % (rtt, host_meta))
-                except:
-                    print("Error getting RTT from file: ", host_meta)
-                    rtt = 0
+        # skip meta files
+        if "meta" in filename:
+            continue
+        if not args.iperf3_json and not filename.endswith(".json"):
+        #if VERBOSE:
+                #print ("    Skipping file: ", file_path)
+            continue  # Skip non-.json files
 
-            if not args.iperf3_json and not filename.endswith(".json"):
-                #if VERBOSE:
-                #     print ("    Skipping file: ", file_path)
-                continue  # Skip non-.json files
+        if VERBOSE:
+            print ("Processing file: ", file_path)
 
-            if VERBOSE:
-                print ("Processing file: ", file_path)
-            # Open and load the JSON file
-            with open(file_path, "r") as json_file:
-                try:
-                    json_data = json.load(json_file)
-                except:
-                    print("JSON load error. Not a JSON file?", file_path)
-                    #sys.exit(-1)
-                    # just continue on error: sometimes files are corrupt
-                    continue
+        # get RTT from meta file if found
+        parts = filename.split(":")
+        host_meta = os.path.join(root,parts[1] + "-meta.json")
+        try:
+            with open(host_meta, "r") as json_file:
+                json_data = json.load(json_file)
+                rtt = json_data["rtt"]
+                #print(f"Got RTT of %d from meta file %s" % (rtt, host_meta))
+        except:
+            print("Error getting RTT from file: ", host_meta)
+            rtt = 0
 
-            #print ("Getting data from file: ", file_path)
-            # Extract bits_per_second and retransmits from sum_sent
+        # Open and load the JSON file
+        with open(file_path, "r") as json_file:
             try:
-                dest_host = json_data["start"]["connecting_to"]["host"]
-                nstreams = json_data["start"]["test_start"]["num_streams"]
-                fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
-                cong = json_data["end"]["sender_tcp_congestion"]
+                json_data = json.load(json_file)
             except:
-                # test most have failed
-                if VERBOSE:
-                    print ("Error extracting dest_host from JSON file: ", file_path)
+                print("JSON load error. Not a JSON file?", file_path)
+                #sys.exit(-1)
+                # just continue on error: sometimes files are corrupt
                 continue
 
-            gbits_per_second = float(json_data["end"]["sum_sent"]["bits_per_second"]) / 1000000000
-            retransmits = json_data["end"]["sum_sent"]["retransmits"]
+        #print ("Getting data from file: ", file_path)
+        # Extract bits_per_second and retransmits from sum_sent
+        try:
+            dest_host = json_data["start"]["connecting_to"]["host"]
+            nstreams = json_data["start"]["test_start"]["num_streams"]
+            fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
+            cong = json_data["end"]["sender_tcp_congestion"]
+        except:
+            # test most have failed
+            if VERBOSE:
+                print ("Error extracting dest_host from JSON file: ", file_path)
+            continue
+
+        gbits_per_second = float(json_data["end"]["sum_sent"]["bits_per_second"]) / 1000000000
+        retransmits = json_data["end"]["sum_sent"]["retransmits"]
 
             # Create a key for the nested dictionary based on dest_host, nstreams, cong, and fq_rate
-            if pacing_string:  # pscheduler still does not support fq_rate, so grab it from the testing_harness jobmeta file
-               fq_rate = float(pacing_int)
+        if pacing_string:  # pscheduler still does not support fq_rate, so grab it from the testing_harness jobmeta file
+            fq_rate = float(pacing_int)
 #               print (" setting fq_rate based on jobmeta pacing rate: ",fq_rate)
 
-            key = (dest_host, nstreams, cong, fq_rate)
+        key = (dest_host, nstreams, cong, fq_rate)
 
             # Add the throughput and retransmits to the nested dictionary
-            if key in average_throughput:
-                average_throughput[key][0].append(gbits_per_second)
-                average_throughput[key][1].append(retransmits)
-            else:
-                average_throughput[key] = [[gbits_per_second], [retransmits], [rtt]]
+        if key in average_throughput:
+            average_throughput[key][0].append(gbits_per_second)
+            average_throughput[key][1].append(retransmits)
+        else:
+            average_throughput[key] = [[gbits_per_second], [retransmits], [rtt]]
 
-            # Append the extracted data to the list
-            data.append([dest_host, rtt, nstreams, cong, fq_rate, gbits_per_second, retransmits])
-            json_file_cnt += 1
+        # Append the extracted data to the list
+        data.append([dest_host, rtt, nstreams, cong, fq_rate, gbits_per_second, retransmits])
+        json_file_cnt += 1
 
 if json_file_cnt == 0:
-     print ("No JSON data files found. Did you run format_pscheduler.sh? Or do you need the -i flag? ")
-     sys.exit()
+    print ("No JSON data files found. Did you run format_pscheduler.sh? Or do you need the -i flag? ")
+    sys.exit()
 
 # Create headers for the average throughput table
 avg_headers = ["Dest Host", "RTT (ms)", "Streams", "CC Alg", "Pacing (Gbps)", "Tput (Gbps)", "Stddev (nvals)", "RXMTs"]
@@ -238,7 +240,7 @@ for key, values in average_throughput.items():
     rtt = values[2][0]
     average_table_data.append([dest_host, rtt, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted + " ({})".format(data_points), int(avg_retransmits)])
 
-# Sort the data by columns: dest_host, nstreams, pacing, cong 
+# Sort the data by columns: dest_host, nstreams, pacing, cong
 average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[2], x[4], x[3]))
 
 # Create a list to store the final formatted data
