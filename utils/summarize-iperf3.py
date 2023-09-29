@@ -25,6 +25,7 @@ args = parser.parse_args()
 
 # add as a flag
 VERBOSE = 0
+#VERBOSE = 1
 
 # Specify the directory to start the search from
 directory_path = "."
@@ -145,10 +146,10 @@ for root, dirs, files in os.walk(directory_path):
     for filename in files:
 
         #print ("Processing file: ", root, filename)
+        file_path = os.path.join(root, filename)
         if filename.startswith("src-cmd"):
             # get RTT from meta file if found
             if re.match(r'src-cmd.*:\d+$', filename):
-                file_path = os.path.join(root, filename)
                 parts = filename.split(":")
                 host_meta = os.path.join(root,parts[1] + "-meta.json")
                 try:
@@ -161,12 +162,12 @@ for root, dirs, files in os.walk(directory_path):
                     rtt = 0
 
             if not args.iperf3_json and not filename.endswith(".json"):
-                if VERBOSE:
-                     print ("    Skipping file: ", filename)
+                #if VERBOSE:
+                #     print ("    Skipping file: ", file_path)
                 continue  # Skip non-.json files
 
             if VERBOSE:
-                print ("Processing file: ", root, filename)
+                print ("Processing file: ", file_path)
             # Open and load the JSON file
             with open(file_path, "r") as json_file:
                 try:
@@ -198,17 +199,17 @@ for root, dirs, files in os.walk(directory_path):
                fq_rate = float(pacing_int)
 #               print (" setting fq_rate based on jobmeta pacing rate: ",fq_rate)
 
-            key = (dest_host, rtt, nstreams, cong, fq_rate)
+            key = (dest_host, nstreams, cong, fq_rate)
 
             # Add the throughput and retransmits to the nested dictionary
             if key in average_throughput:
                 average_throughput[key][0].append(gbits_per_second)
                 average_throughput[key][1].append(retransmits)
             else:
-                average_throughput[key] = [[gbits_per_second], [retransmits]]
+                average_throughput[key] = [[gbits_per_second], [retransmits], [rtt]]
 
             # Append the extracted data to the list
-            data.append([dest_host, nstreams, cong, fq_rate, gbits_per_second, retransmits])
+            data.append([dest_host, rtt, nstreams, cong, fq_rate, gbits_per_second, retransmits])
             json_file_cnt += 1
 
 if json_file_cnt == 0:
@@ -226,16 +227,15 @@ for key, values in average_throughput.items():
     avg_retransmits = sum(values[1]) / len(values[1])
     throughput_values = values[0]  # List of throughput values
     data_points = len(throughput_values)  # Number of data points
-    try:
+    if data_points > 1:
         std_dev_throughput = statistics.stdev(throughput_values)  # Calculate stddev
-    except:
-        if VERBOSE:
-            print ("Error computing stdev for host ", key, throughput_values)
+    else:
         std_dev_throughput = 0
-    dest_host, rtt, nstreams, cong, fq_rate = key
+    dest_host, nstreams, cong, fq_rate = key
     avg_throughput_formatted = "{:.2f}".format(avg_throughput)
     std_dev_throughput_formatted = "{:.2f}".format(std_dev_throughput)  # Format stddev
     #average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted, int(avg_retransmits)])
+    rtt = values[2][0]
     average_table_data.append([dest_host, rtt, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted + " ({})".format(data_points), int(avg_retransmits)])
 
 # Sort the data by columns: dest_host, nstreams, pacing, cong 
