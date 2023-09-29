@@ -1,6 +1,9 @@
 #!/bin/bash
 #set -x
 
+echo "this is the old version of the script. Use format_pscheduler.py instead!"
+exit
+
 # the JSON output from pscheduler is pretty unreadable, so run this script to clean it up
 # it also contains 2 sections: Participant 0 and Participant 1.
 # for this purpose, we only need the Sender (Participant 0)
