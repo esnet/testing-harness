@@ -219,10 +219,9 @@ class Job:
             # Ping the host and get the RTT (in seconds)
 
             log.debug ("Testing ping to host: ", host['hostname'])
-            rtt = ping(host['hostname'])
+            rtt_ms = ping(host['hostname'], unit='ms')
 
-            if rtt is not None:
-                rtt_ms = rtt * 1000  # Convert RTT to milliseconds
+            if rtt_ms is not None:
                 log.info(f"RTT to {host['hostname']}: {rtt_ms:.1f} ms")
             else:
                 log.info(f"ping to {host['hostname']} FAILED. skipping this host")
