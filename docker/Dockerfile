@@ -9,8 +9,8 @@ WORKDIR /src
 ARG IP_RT2_VER=6.4.0
 #ARG IP_RT2_VER=5.8.0
 
-RUN yum -y install git wget tcsh ethtool
-RUN yum -y groupinstall "Development tools" openssl-devel
+RUN yum -y install git wget tcsh ethtool openssl-devel
+RUN yum -y groupinstall "Development tools" 
 
 # Get updated version of ss tool
 RUN wget --no-check-certificate https://git.kernel.org/pub/scm/network/iproute2/iproute2.git/snapshot/iproute2-${IP_RT2_VER}.tar.gz 
@@ -30,8 +30,8 @@ FROM perfsonar/testpoint:latest
 #FROM perfsonar/testpoint:v4.4.4-systemd
 WORKDIR /src
 
-RUN yum -y install git wget tcsh ethtool
-RUN yum -y groupinstall "Development tools"
+RUN yum -y install git wget tcsh ethtool openssl-devel
+RUN yum -y groupinstall "Development tools" 
 
 # Move over binaries and configuratioon from build image
 COPY --from=build /usr/local/ /usr/local/
@@ -48,6 +48,9 @@ RUN git clone -b bbr3-testing https://github.com/esnet/testing-harness.git
 # this runs setup.py
 RUN cd testing-harness && pip3 install .
 RUN ln -s /src/testing-harness/ /harness
+
+# Needed to run iperf3-mt for now 
+ENV LD_LIBRARY_PATH=/usr/bin:$LD_LIBRARY_PATH
 
 # share with host OS
 VOLUME /data
