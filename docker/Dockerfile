@@ -10,7 +10,7 @@ ARG IP_RT2_VER=6.4.0
 #ARG IP_RT2_VER=5.8.0
 
 RUN yum -y install git wget tcsh ethtool
-RUN yum -y groupinstall "Development tools"
+RUN yum -y groupinstall "Development tools" openssl-devel
 
 # Get updated version of ss tool
 RUN wget --no-check-certificate https://git.kernel.org/pub/scm/network/iproute2/iproute2.git/snapshot/iproute2-${IP_RT2_VER}.tar.gz 
@@ -23,7 +23,7 @@ RUN cd sysstat && ./configure --prefix=/usr/local && make -j4 && make install
 # Get iperf3 version that does different congestion control on even/odd numbered streams
 #RUN git clone -b bbr2-testing https://github.com/esnet/iperf.git
 RUN git clone -b mt https://github.com/bltierney/iperf3-bbr-testing.git
-RUN cd iperf3-bbr-testing && ./configure --enable-static --disable-shared && make -j4
+RUN cd iperf3-bbr-testing && ./configure --prefix=/usr --enable-static --disable-shared && make -j4
 
 # Now build final perfSONAR extended image
 FROM perfsonar/testpoint:latest
@@ -31,6 +31,7 @@ FROM perfsonar/testpoint:latest
 WORKDIR /src
 
 RUN yum -y install git wget tcsh ethtool
+RUN yum -y groupinstall "Development tools"
 
 # Move over binaries and configuratioon from build image
 COPY --from=build /usr/local/ /usr/local/
@@ -44,8 +45,8 @@ RUN mv /usr/sbin/tcpdump /usr/bin/tcpdump; ln -s /usr/bin/tcpdump /usr/sbin/tcpd
 
 # Get and configure testing harness
 RUN git clone -b bbr3-testing https://github.com/esnet/testing-harness.git
+# this runs setup.py
 RUN cd testing-harness && pip3 install .
-RUN pip3 install ping3
 RUN ln -s /src/testing-harness/ /harness
 
 # share with host OS

@@ -22,5 +22,7 @@ setup(
 
     packages=find_packages(),
 
-    install_requires=['requests', 'pyyaml', 'pika', 'ping3', 'tabulate', 'pptx']
+    install_requires=['requests', 'pyyaml', 'pika', 'ping3', 'tabulate']
+    # note: summarize_iperf3.py script all needs python-pptx, but install of that fails on CentOS7
+    #install_requires=['requests', 'pyyaml', 'pika', 'ping3', 'tabulate', 'python-pptx']
 )
