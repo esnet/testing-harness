@@ -19,6 +19,7 @@ from tabulate import tabulate
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description="Summarize results of pscheduler testing .json files")
 parser.add_argument("-i", "--iperf3-json", action="store_true", help="Assume iperf3 output, not pscheduler JSON")
+parser.add_argument("-2", "--iperf2", action="store_true", help="Assume iperf2 output from pscheduler")
 parser.add_argument("-f", "--full-results", action="store_true", help="show full results for each individual test")
 parser.add_argument("-o", "--output-pptx", help="Specify the output PowerPoint file")
 args = parser.parse_args()
@@ -145,15 +146,22 @@ for root, dirs, files in os.walk(directory_path):
     json_file_cnt = 0
     for filename in files:
 
-        #print ("Processing file: ", root, filename)
         file_path = os.path.join(root, filename)
+        if VERBOSE:
+            print ("Processing file: ", file_path)
         # skip meta files
-        if "meta" in filename:
+        if "meta" in filename or "pacing" in filename:
             continue
-        if not args.iperf3_json and not filename.endswith(".json"):
-        #if VERBOSE:
-                #print ("    Skipping file: ", file_path)
-            continue  # Skip non-.json files
+        if os.path.getsize(file_path) < 1000:
+            if VERBOSE:
+                print(f"   Skipping '{file_path}' because it's less than 1000 bytes.")
+            continue 
+        if args.iperf2:
+            print ("iperf2 file:", file_path)
+        elif not args.iperf3_json and not filename.endswith(".json"):
+            if VERBOSE:
+                print ("    Skipping file: ", file_path)
+                continue  # Skip non-.json files
 
         if VERBOSE:
             print ("Processing file: ", file_path)
@@ -165,6 +173,7 @@ for root, dirs, files in os.walk(directory_path):
             with open(host_meta, "r") as json_file:
                 json_data = json.load(json_file)
                 rtt = json_data["rtt"]
+                dest_host = json_data["hostname"]
                 #print(f"Got RTT of %d from meta file %s" % (rtt, host_meta))
         except:
             print("Error getting RTT from file: ", host_meta)
@@ -180,21 +189,49 @@ for root, dirs, files in os.walk(directory_path):
                 # just continue on error: sometimes files are corrupt
                 continue
 
-        #print ("Getting data from file: ", file_path)
-        # Extract bits_per_second and retransmits from sum_sent
-        try:
-            dest_host = json_data["start"]["connecting_to"]["host"]
-            nstreams = json_data["start"]["test_start"]["num_streams"]
-            fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
-            cong = json_data["end"]["sender_tcp_congestion"]
-        except:
-            # test most have failed
-            if VERBOSE:
-                print ("Error extracting dest_host from JSON file: ", file_path)
-            continue
+        if VERBOSE:
+             print ("Getting data from file: ", file_path)
+        if args.iperf2:
+             # Extract throughput-bits for SUM stream
+             sum_stream = next((stream for stream in json_data["summary"]["streams"] if stream["stream-id"] == "SUM"), None)
+             if sum_stream:
+                 gbits_per_second = sum_stream["throughput-bits"] / 1000000000
+                 print("   Throughput Bits for SUM Stream:", gbits_per_second)
+             else:
+                 print("   SUM Stream not found in the JSON data.")
+                 gbits_per_second = 0
+             retransmits = 0  # pscheduler does not capture retrans from iperf2
+             fq_rate = float(pacing_int)  # from jobmeta.json file
 
-        gbits_per_second = float(json_data["end"]["sum_sent"]["bits_per_second"]) / 1000000000
-        retransmits = json_data["end"]["sum_sent"]["retransmits"]
+             # Extract the string after "-Z" in "diags"
+             diags_string = json_data["diags"]
+             match = re.search(r'-Z (\S+)', diags_string)
+             if match:
+                 cong = match.group(1)
+                 #print("   Congestion Control Algorithm:", cong)
+             else:
+                 print("   Congestion Control Algorithm not found in the 'diags' field.")
+             # Extract the string after "-P" in "diags"
+             nstreams = json_data["diags"]
+             match = re.search(r'-P (\d+)', diags_string)
+             if match:
+                 nstreams = match.group(1)
+                 #print("   Number of Streams:", nstreams)
+             else:
+                 print("   Number of streams not found in the 'diags' field.")
+        else:
+            try:
+               nstreams = json_data["start"]["test_start"]["num_streams"]
+               fq_rate = float(json_data["start"]["test_start"]["fqrate"]) / 1000000000
+               cong = json_data["end"]["sender_tcp_congestion"]
+            except:
+               # test most have failed
+               if VERBOSE:
+                   print ("Error extracting dest_host from JSON file: ", file_path)
+               continue
+
+            gbits_per_second = float(json_data["end"]["sum_sent"]["bits_per_second"]) / 1000000000
+            retransmits = json_data["end"]["sum_sent"]["retransmits"]
 
             # Create a key for the nested dictionary based on dest_host, nstreams, cong, and fq_rate
         if pacing_string:  # pscheduler still does not support fq_rate, so grab it from the testing_harness jobmeta file
@@ -203,7 +240,7 @@ for root, dirs, files in os.walk(directory_path):
 
         key = (dest_host, nstreams, cong, fq_rate)
 
-            # Add the throughput and retransmits to the nested dictionary
+        # Add the throughput and retransmits to the nested dictionary
         if key in average_throughput:
             average_throughput[key][0].append(gbits_per_second)
             average_throughput[key][1].append(retransmits)
