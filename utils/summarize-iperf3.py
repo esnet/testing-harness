@@ -11,14 +11,14 @@ import argparse
 import statistics
 import re
 from tabulate import tabulate
-#from pptx import Presentation
-#from pptx.util import Inches
-#from pptx.enum.text import PP_ALIGN
-#from pptx.dml.color import RGBColor
+from pptx import Presentation
+from pptx.util import Inches
+from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description="Summarize results of pscheduler testing .json files")
-parser.add_argument("-i", "--iperf3-json", action="store_true", help="Assume iperf3 output, not pscheduler JSON")
+parser.add_argument("-3", "--iperf3-json", action="store_true", help="Assume iperf3 output, not pscheduler JSON")
 parser.add_argument("-2", "--iperf2", action="store_true", help="Assume iperf2 output from pscheduler")
 parser.add_argument("-f", "--full-results", action="store_true", help="show full results for each individual test")
 parser.add_argument("-o", "--output-pptx", help="Specify the output PowerPoint file")
@@ -152,13 +152,13 @@ for root, dirs, files in os.walk(directory_path):
         # skip meta files
         if "meta" in filename or "pacing" in filename:
             continue
-        if os.path.getsize(file_path) < 1000:
+        if os.path.getsize(file_path) < 1000 or filename.startswith("tmp") or filename.startswith("test"):
             if VERBOSE:
                 print(f"   Skipping '{file_path}' because it's less than 1000 bytes.")
             continue 
         if args.iperf2:
             print ("iperf2 file:", file_path)
-        elif not args.iperf3_json and not filename.endswith(".json"):
+        elif not args.iperf3_json and not filename.endswith(".json") :
             if VERBOSE:
                 print ("    Skipping file: ", file_path)
                 continue  # Skip non-.json files
@@ -168,7 +168,11 @@ for root, dirs, files in os.walk(directory_path):
 
         # get RTT from meta file if found
         parts = filename.split(":")
-        host_meta = os.path.join(root,parts[1] + "-meta.json")
+        try:
+            host_meta = os.path.join(root,parts[1] + "-meta.json")
+        except:
+            print ("ERROR: hostname not found in filename: ",filename)
+            #sys.exit()
         try:
             with open(host_meta, "r") as json_file:
                 json_data = json.load(json_file)
@@ -208,7 +212,7 @@ for root, dirs, files in os.walk(directory_path):
              match = re.search(r'-Z (\S+)', diags_string)
              if match:
                  cong = match.group(1)
-                 #print("   Congestion Control Algorithm:", cong)
+                 print("   Congestion Control Algorithm:", cong)
              else:
                  print("   Congestion Control Algorithm not found in the 'diags' field.")
              # Extract the string after "-P" in "diags"
