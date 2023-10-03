@@ -196,14 +196,28 @@ for root, dirs, files in os.walk(directory_path):
         if VERBOSE:
              print ("Getting data from file: ", file_path)
         if args.iperf2:
-             # Extract throughput-bits for SUM stream
-             sum_stream = next((stream for stream in json_data["summary"]["streams"] if stream["stream-id"] == "SUM"), None)
-             if sum_stream:
-                 gbits_per_second = sum_stream["throughput-bits"] / 1000000000
+             # Extract the string after "-P" in "diags"
+             diags_string = json_data["diags"]
+             match = re.search(r'-P (\d+)', diags_string)
+             if match:
+                 nstreams = int(match.group(1))
+                 print("   Number of Streams:", nstreams)
+             else:
+                 print("   Number of streams not found in the 'diags' field. Assuming 1 stream")
+                 nstreams = 1
+             if nstreams == 1:
+                 gbits_per_second = json_data["summary"]["streams"][0]["throughput-bits"] / 1000000000
                  print("   Throughput Bits for SUM Stream:", gbits_per_second)
              else:
-                 print("   SUM Stream not found in the JSON data.")
-                 gbits_per_second = 0
+                 # Extract throughput-bits for SUM stream
+                 sum_stream = next((stream for stream in json_data["summary"]["streams"] if stream["stream-id"] == "SUM"), None)
+                 if sum_stream:
+                     gbits_per_second = sum_stream["throughput-bits"] / 1000000000
+                     print("   Throughput Bits for SUM Stream:", gbits_per_second)
+                 else:
+                     print("   SUM Stream not found in the JSON data.")
+                     gbits_per_second = 0
+
              retransmits = 0  # pscheduler does not capture retrans from iperf2
              fq_rate = float(pacing_int)  # from jobmeta.json file
 
@@ -215,14 +229,6 @@ for root, dirs, files in os.walk(directory_path):
                  print("   Congestion Control Algorithm:", cong)
              else:
                  print("   Congestion Control Algorithm not found in the 'diags' field.")
-             # Extract the string after "-P" in "diags"
-             nstreams = json_data["diags"]
-             match = re.search(r'-P (\d+)', diags_string)
-             if match:
-                 nstreams = match.group(1)
-                 #print("   Number of Streams:", nstreams)
-             else:
-                 print("   Number of streams not found in the 'diags' field.")
         else:
             try:
                nstreams = json_data["start"]["test_start"]["num_streams"]
