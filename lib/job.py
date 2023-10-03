@@ -60,7 +60,10 @@ class Job:
         self.src = cfg.get('src', None)
         self.dst = cfg.get('dst', None)
         self.alias = cfg.get('alias', None)
-        self.src_cmd = cfg.get('src-cmd', None)
+        input_string = cfg.get('src-cmd', None)
+        # make sure there are no extra spaces in src-cmd, as this break pscheduler
+        self.src_cmd = re.sub(r'\s{2,}', ' ', input_string)
+
         self.dst_cmd = cfg.get('dst-cmd', None)
         self.src_cmd_once = cfg.getboolean('src-cmd-once', False)
         self.dst_cmd_once = cfg.getboolean('dst-cmd-once', False)
@@ -218,8 +221,13 @@ class Job:
             }
             # Ping the host and get the RTT (in seconds)
 
-            log.debug ("Testing ping to host: ", host['hostname'])
-            rtt_ms = ping(host['hostname'], unit='ms')
+            try:
+                ping_host = host['hostname']
+            except:
+                log.error(f"ERROR: host object does not contain a hostname")
+                sys.exit()
+            log.debug (f"Testing ping to host: {ping_host}")
+            rtt_ms = ping(ping_host, unit='ms')
 
             if rtt_ms is not None:
                 log.info(f"RTT to {host['hostname']}: {rtt_ms:.1f} ms")
@@ -342,14 +350,14 @@ class Job:
                     log.error(f"Failed to collect tcptrace stats for {dst}: {e}")
 
     def _run_host_cmd(self, host, cmd, ofname, stop):
-        log.debug(f"Running \"{cmd}\" on \"{host}\", with output to file \"{ofname}\"")
         if host == self.hostname or host in loopbacks or not host:
             initcmd = []
         elif self.user:
-            initcmd = ["ssh", "-l", self.user, "-t", "-o", "StrictHostKeyChecking=no", host]
+            initcmd = ["ssh", "-l", self.user, "-t", "-o", "StrictHostKeyChecking=no", hostname]
         else:
-            initcmd = ["ssh", "-t", "-o", "StrictHostKeyChecking=no", host]
+            initcmd = ["ssh", "-t", "-o", "StrictHostKeyChecking=no", hostname]
 
+        log.debug(f"run_host_cmd: Running \"{cmd}\" on \"{self.hostname}\", with output to file \"{ofname}\"")
         rcmd = initcmd + cmd.split(" ")
         log.debug(rcmd)
         try:
@@ -359,6 +367,8 @@ class Job:
             return
         outs = None
         errs = None
+        proc.wait()  # wait for process to finish
+        log.debug("running of command finished")
         if stop:
             while not stop():
                 time.sleep(1)
@@ -560,6 +570,7 @@ class Job:
                                 args=(self.src, cmd, ofname, None))
               th.start()
               th.join()
+              time.sleep(2)
               log.debug("size of results file %s is %d" % (ofname, os.path.getsize(ofname)))
               if os.path.getsize(ofname) > 1000 :
                  done = True
