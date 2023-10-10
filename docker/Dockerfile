@@ -20,10 +20,16 @@ RUN tar xvzf iproute2-${IP_RT2_VER}.tar.gz; cd iproute2-${IP_RT2_VER}; ./configu
 RUN git clone https://github.com/sysstat/sysstat.git
 RUN cd sysstat && ./configure --prefix=/usr/local && make -j4 && make install
 
-# Get iperf3 version that does different congestion control on even/odd numbered streams
+# install threaded version of iperf3 in /usr
+RUN wget https://github.com/esnet/iperf/archive/refs/tags/iperf-3.15-mt-beta1.tar.gz
+RUN tar xvzf iperf-3.15-mt-beta1.tar.gz
+RUN cd iperf-* && ./configure --prefix=/usr && make && make install
+
+# install modified version of iperf3 that does different congestion control on even/odd numbered streams
+# install in /usr/local
 #RUN git clone -b bbr2-testing https://github.com/esnet/iperf.git
 RUN git clone -b mt https://github.com/bltierney/iperf3-bbr-testing.git
-RUN cd iperf3-bbr-testing && ./configure --prefix=/usr --enable-static --disable-shared && make -j4
+RUN cd iperf3-bbr-testing && ./configure --prefix=/usr/local && make -j4 && make install
 
 # Now build final perfSONAR extended image
 FROM perfsonar/testpoint:latest
