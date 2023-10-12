@@ -3,12 +3,15 @@
 import os
 import subprocess
 import argparse
+import socket
 
 # Function to ping a host using the system's native ping command
 def ping_host(host):
     try:
         # Run the ping command and capture the output
         output = subprocess.check_output(['ping', '-c', '4', host], universal_newlines=True)
+        # for Jumbo frames
+        #output = subprocess.check_output(['ping', '-s', '8000', '-c', '4', host], universal_newlines=True)
 
         # Check if the output contains the word "received" to determine reachability
         if "received" in output:
@@ -21,10 +24,12 @@ def ping_host(host):
 # Function to check if a port is open using 'nc'
 def check_port_open(host, port):
     try:
-        subprocess.check_output(['nc', '-z', '-w', '2', host, port], universal_newlines=True)
-        return True
-    except subprocess.CalledProcessError:
-        return False
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(2)  # Set a timeout for the connection attempt
+            s.connect((host, int(port)))
+        return True  # Connection succeeded, so the port is open
+    except (socket.timeout, ConnectionRefusedError):
+        return False  # Connection failed, so the port is closed or unreachable
 
 # Function to read hosts from a file and ping them and check port 443
 def ping_and_check_port_from_file(filename, check_port):
@@ -38,9 +43,14 @@ def ping_and_check_port_from_file(filename, check_port):
                 # Ignore lines that start with "#"
                 if not line.startswith("#") and line:
                     host = line
-                    print ("Checking host: ", host)
+                    if ',' in host:  # if CVS file
+                        host = host.split(',')[0]
+                    if host == 'hostname':
+                         continue    # if 1st line of csv file
+                    print ("Checking ping to host: ", host)
                     is_reachable = ping_host(host)
                     if check_port:
+                        print ("Checking port 443 on host: ", host)
                         is_port_open = check_port_open(host, '443')
                         if is_reachable and is_port_open:
                             reachable_hosts.append(host)
