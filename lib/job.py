@@ -367,7 +367,6 @@ class Job:
             return
         outs = None
         errs = None
-        proc.wait()  # wait for process to finish
         log.debug("running of command finished")
         if stop:
             while not stop():
