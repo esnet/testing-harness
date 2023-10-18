@@ -175,8 +175,8 @@ for root, dirs, files in os.walk(directory_path):
                     if VERBOSE:
                         print(f"The integer after '--mss' in {file_path} is: {mss_value}")
                 else:
-                    print("No '--mss' value found for this test. Exiting. ")
-                    sys.exit()
+                    mss_value = int(json_data["MTU"]) - 60
+                    print(f"\n  *** No '--mss' value found for this test ({file_path}). Using Host default value of {mss_value} from jobmeta file")
 
     json_file_cnt = 0
     for filename in files:
@@ -195,6 +195,8 @@ for root, dirs, files in os.walk(directory_path):
             if VERBOSE:
                 print ("    Skipping file: ", file_path)
                 continue  # Skip non-.json files
+        else:
+            print ("iperf3 file:", file_path)
 
         #if VERBOSE:
         #    print ("Processing file: ", file_path)
@@ -273,6 +275,8 @@ for root, dirs, files in os.walk(directory_path):
                    print ("Error extracting dest_host from JSON file: ", file_path)
                continue
 
+            print("   Number of Streams:", nstreams)
+            print("   Congestion Control Algorithm:", cong)
             gbits_per_second = float(json_data["end"]["sum_sent"]["bits_per_second"]) / 1000000000
             retransmits = json_data["end"]["sum_sent"]["retransmits"]
 
@@ -332,10 +336,11 @@ for key, values in average_throughput.items():
     else:
         average_table_data.append([dest_host, rtt, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted + " ({})".format(data_points), int(avg_retransmits)])
 
-# Sort the data by columns: dest_host, nstreams, pacing, cong
 if args.include_mss:
-    average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[2], x[3], x[4], x[3]))
+    #average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[2], x[3], x[4]))
+    average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[2], x[3]))
 else:
+# Sort the data by columns: dest_host, nstreams, pacing, cong
     average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[2], x[4], x[3]))
 
 # Create a list to store the final formatted data
