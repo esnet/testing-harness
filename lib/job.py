@@ -367,7 +367,6 @@ class Job:
             return
         outs = None
         errs = None
-        log.debug("running of command finished")
         if stop:
             while not stop():
                 time.sleep(1)
@@ -415,18 +414,11 @@ class Job:
             self._export_md(item)
 
             cmd = self.src_cmd.format(dst=dst)
-            log.info(f"Testing to {dst} using \"{cmd}\"")
-
-            #first ping the host to make sure its up
-            # old way, now using ping3 lib, and storing result in hostname-meta.json
-            #png = f'ping -W 5 -c 2 {dst} > /dev/null'
-            #status = os.system(png)
-            #if status: # ping failed, skip
-            #    log.info(f"Error: ping to {dst} failed, error code: \"{status}\"")
-            #    continue
+            log.info(f"Testing {self.iters} times to {dst} using \"{cmd}\"")
 
             if item['rtt'] == 0:
                  # ping must have failed, so skip this host
+                 log.info(f"Error: ping to {dst} failed")
                  continue
 
             for iter in range(1, int(self.iters)+1):
@@ -528,8 +520,10 @@ class Job:
         stop_threads = False
         jthreads = list()
 
+        log.info (f"subrun: {self.pre_src_cmd}" )
         # handle pre-cmd invocation
         if self.pre_src_cmd:
+            log.info (f"running pre_src_cmd: {self.pre_src_cmd}" )
             ofname = os.path.join(self.outdir, f"pre-src-cmd:{ofname_suffix}")
             th = Thread(target=self._run_host_cmd,
                                 args=(self.src, self.pre_src_cmd, ofname, (lambda: stop_threads)))
@@ -607,6 +601,7 @@ class Job:
             th.join()
 
         if self.post_src_cmd:
+            log.info (f"running post_src_cmd: {self.post_src_cmd}" )
             ofname = os.path.join(self.outdir, f"post-src-cmd:{ofname_suffix}")
             log.debug ("running post cmd: %s " % self.post_src_cmd)
             th = Thread(target=self._run_host_cmd,
