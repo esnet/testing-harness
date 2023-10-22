@@ -24,7 +24,7 @@ args = parser.parse_args()
 
 # add as a flag
 VERBOSE = 0
-#VERBOSE = 1
+VERBOSE = 1
 
 if args.output_pptx:
     from pptx import Presentation
@@ -84,8 +84,9 @@ def create_pptx(data, avg_headers):
     # Iterate through data
     # NOTE: this assume 6 test types per host. May need to edit this, or add a flag, or try to compute
     rows = 6  # this many data rows per slide (1 header, 6 data rows)
-    # for MSS test results, might be up to 16 rows
-    rows = 16  # this many data rows per slide (1 header, 12 data rows)
+    # for MSS test results, might be up to 8 or 16 rows
+    #rows = 16  # this many data rows per slide (1 header, 16 data rows)
+    rows = 8  # this many data rows per slide (1 header, 8 data rows)
     slide_num = 1
     for row_idx, row_data in enumerate(data):
 
@@ -169,21 +170,21 @@ for root, dirs, files in os.walk(directory_path):
                iperf2 = 0
             # check jobmeta.json file for mss for set of tests in this dir
             if args.include_mss:
-                match = re.search(r'--mss (\d+)', src_cmd)
-                if match:
-                    mss_value = int(match.group(1))
-                    if VERBOSE:
-                        print(f"The integer after '--mss' in {file_path} is: {mss_value}")
-                else:
-                    mss_value = int(json_data["MTU"]) - 60
-                    print(f"\n  *** No '--mss' value found for this test ({file_path}). Using Host default value of {mss_value} from jobmeta file")
+# to get from pscheduler command:
+#                match = re.search(r'--mss (\d+)', src_cmd)
+#                if match:
+#                    mss_value = int(match.group(1))
+#                    if VERBOSE:
+#                        print(f"The integer after '--mss' in {file_path} is: {mss_value}")
+#                else:
+                     mss_value = int(json_data["MTU"]) - 60
 
     json_file_cnt = 0
     for filename in files:
 
         file_path = os.path.join(root, filename)
         # skip meta files
-        if "meta" in filename or "pacing" in filename:
+        if "meta" in filename or "pacing" in filename or ".pptx" in filename or ".out" in filename:
             continue
         if os.path.getsize(file_path) < 1000 or filename.startswith("tmp") or filename.startswith("test"):
             if VERBOSE:
@@ -275,8 +276,7 @@ for root, dirs, files in os.walk(directory_path):
                    print ("Error extracting dest_host from JSON file: ", file_path)
                continue
 
-            print("   Number of Streams:", nstreams)
-            print("   Congestion Control Algorithm:", cong)
+            print(f"   Number of Streams: {nstreams}; CC Alg: {cong}")
             gbits_per_second = float(json_data["end"]["sum_sent"]["bits_per_second"]) / 1000000000
             retransmits = json_data["end"]["sum_sent"]["retransmits"]
 
@@ -298,7 +298,12 @@ for root, dirs, files in os.walk(directory_path):
             average_throughput[key] = [[gbits_per_second], [retransmits], [rtt]]
 
         # Append the extracted data to the list
-        data.append([dest_host, rtt, nstreams, cong, fq_rate, gbits_per_second, retransmits])
+        if args.include_mss:
+            if VERBOSE:
+                print ("adding results to list: ", dest_host, mss_value, nstreams, cong, gbits_per_second)
+            data.append([dest_host, rtt, mss_value, nstreams, cong, fq_rate, gbits_per_second, retransmits])
+        else:
+            data.append([dest_host, rtt, nstreams, cong, fq_rate, gbits_per_second, retransmits])
         json_file_cnt += 1
 
 if json_file_cnt == 0:
@@ -329,7 +334,6 @@ for key, values in average_throughput.items():
         dest_host, nstreams, cong, fq_rate = key
     avg_throughput_formatted = "{:.2f}".format(avg_throughput)
     std_dev_throughput_formatted = "{:.2f}".format(std_dev_throughput)  # Format stddev
-    #average_table_data.append([dest_host, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted, int(avg_retransmits)])
     rtt = values[2][0]
     if args.include_mss:
         average_table_data.append([dest_host, rtt, mss, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted + " ({})".format(data_points), int(avg_retransmits)])
@@ -337,10 +341,12 @@ for key, values in average_throughput.items():
         average_table_data.append([dest_host, rtt, nstreams, cong, fq_rate, avg_throughput_formatted, std_dev_throughput_formatted + " ({})".format(data_points), int(avg_retransmits)])
 
 if args.include_mss:
-    #average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[2], x[3], x[4]))
-    average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[2], x[3]))
+    average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[3], x[2]))
+    #print ("sort A: sort by columns 0,2,3")
+    #for item in average_table_data:
+    #    print("Sort Keys:", (item[0], item[2], item[3]))
 else:
-# Sort the data by columns: dest_host, nstreams, pacing, cong
+    # Sort the data by columns: dest_host, nstreams, pacing, cong
     average_table_data = sorted(average_table_data, key=lambda x: (x[0], x[2], x[4], x[3]))
 
 # Create a list to store the final formatted data
@@ -375,10 +381,14 @@ print(tabulate(formatted_average_table_data, headers=avg_headers, tablefmt="grid
 # Create headers for the main data table
 data_headers = ["Dest Host", "Num Streams", "CC Alg", "Pacing (Gbps)", "Throughput", "Retransmits"]
 
-# Sort the data by columns: dest_host, nstreams, cong, and fq_rate
-data = sorted(data, key=lambda x: (x[0], x[1], x[3], x[2]))
-
 if args.full_results:
+    if args.include_mss:
+        #print ("sort B: sort by columns 0,2,3")
+        data = sorted(data, key=lambda x: (x[0], x[3], x[2]))
+    else:
+        # Sort the data by columns: dest_host, nstreams, cong, and fq_rate
+        data = sorted(data, key=lambda x: (x[0], x[1], x[3], x[2]))
+
     # Print the main data table
     print("\nResults from each individual test:")
     print(tabulate(data, headers=data_headers, tablefmt="grid"))
