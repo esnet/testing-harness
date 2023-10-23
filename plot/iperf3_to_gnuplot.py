@@ -117,6 +117,8 @@ def main():
     except Exception as ex:  # pylint: disable=broad-except
         parser.error('Could not parse JSON from file (ex): {0}'.format(str(ex)))
 
+    #pp.pprint(iperf)
+
     if options.output:
         absp = os.path.abspath(options.output)
         output_dir, _ = os.path.split(absp)
