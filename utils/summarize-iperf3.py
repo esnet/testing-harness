@@ -168,16 +168,26 @@ for root, dirs, files in os.walk(directory_path):
                iperf2 = 1
             else:
                iperf2 = 0
-            # check jobmeta.json file for mss for set of tests in this dir
-            if args.include_mss:
-# to get from pscheduler command:
-#                match = re.search(r'--mss (\d+)', src_cmd)
-#                if match:
-#                    mss_value = int(match.group(1))
-#                    if VERBOSE:
-#                        print(f"The integer after '--mss' in {file_path} is: {mss_value}")
-#                else:
-                     mss_value = int(json_data["MTU"]) - 60
+
+            # get nstreams and cong_alg from src_cmd, if set
+            pattern = r'--parallel=([^\s]+)'
+            match = re.search(pattern, src_cmd)
+            if match:
+                nstreams = match.group(1)
+            else:
+                nstreams = 1
+            print(f"   Number of streams: {nstreams}")
+
+            pattern = r'--congestion=([^\s]+)'
+            match = re.search(pattern, src_cmd)
+            if match:
+                cong = match.group(1)
+                print(f"   Congestion control Alg: {cong}")
+            else:
+                print("   Congestion control Alg not specified. ")
+
+
+            mss_value = int(json_data["MTU"]) - 60
 
     json_file_cnt = 0
     for filename in files:
@@ -233,14 +243,15 @@ for root, dirs, files in os.walk(directory_path):
              print ("Getting data from file: ", file_path)
         if args.iperf2 or iperf2:
              # Extract the string after "-P" in "diags"
-             diags_string = json_data["diags"]
-             match = re.search(r'-P (\d+)', diags_string)
-             if match:
-                 nstreams = int(match.group(1))
-                 print("   Number of Streams:", nstreams)
-             else:
-                 print("   Number of streams not found in the 'diags' field. Assuming 1 stream")
-                 nstreams = 1
+             # get from jobmeta instead above
+             #diags_string = json_data["diags"]
+             #match = re.search(r'-P (\d+)', diags_string)
+             #if match:
+             #    nstreams = int(match.group(1))
+             #    print("   Number of Streams:", nstreams)
+             #else:
+             #    print("   Number of streams not found in the 'diags' field. Assuming 1 stream")
+             #    nstreams = 1
              if nstreams == 1:
                  gbits_per_second = json_data["summary"]["streams"][0]["throughput-bits"] / 1000000000
                  print("   Throughput Bits for SUM Stream:", gbits_per_second)
@@ -258,13 +269,14 @@ for root, dirs, files in os.walk(directory_path):
              fq_rate = float(pacing_int)  # from jobmeta.json file
 
              # Extract the string after "-Z" in "diags"
-             diags_string = json_data["diags"]
-             match = re.search(r'-Z (\S+)', diags_string)
-             if match:
-                 cong = match.group(1)
-                 print("   Congestion Control Algorithm:", cong)
-             else:
-                 print("   Congestion Control Algorithm not found in the 'diags' field.")
+             # now getting from jobmeta instead
+             #diags_string = json_data["diags"]
+             #match = re.search(r'-Z (\S+)', diags_string)
+             #if match:
+             #    cong = match.group(1)
+             #    print("   Congestion Control Algorithm:", cong)
+             #else:
+             #    print("   Congestion Control Algorithm not found in the 'diags' field.")
         else:
             try:
                nstreams = json_data["start"]["test_start"]["num_streams"]

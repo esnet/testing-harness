@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 
+# this program not needed!
+
+# not getting diags stuff from jobmeta.
+
+# note: for pscheduler iperf3, the 'diags' element is a long horribly unreadable string.
+# this program will clean that up, but it wont be parable JSON.
+# 
+# to extract the important parts, you can just do this:
+# cat filename | jq ".intervals, .summary"
+#  
+
 import os
 import re
 import subprocess
