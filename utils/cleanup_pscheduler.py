@@ -34,6 +34,7 @@ for folder_path, subfolders, files in os.walk(root_directory):
 
             subprocess.run(f"{jq_cmd}", shell=True)
         else:
-            print(f"   Skipping file: {file_path}. Name does not match or file too small {file_size}")
+            #print(f"   Skipping file: {file_path}. Name does not match or file too small {file_size}")
+            continue
 
 
