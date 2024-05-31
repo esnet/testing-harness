@@ -237,8 +237,13 @@ class Job:
                 log.info(f"ping to {host['hostname']} FAILED. skipping this host")
                 rtt_ms = 0
             # store RTT in the host dict
+<<<<<<< HEAD
             #host['rtt'] = int(rtt_ms)
             host['rtt'] = math.ceil(rtt_ms) # always round up so .1 does not become 0
+=======
+            host['rtt'] = float(rtt_ms)
+            host['rtt'] = round(host['rtt'], 2)
+>>>>>>> 4513bfb04ec097735330885b32c3c367979315ef
 
             md.update(host)
             md.update({"profile_settings": self.profile_manager.get_profile(host)})
@@ -424,7 +429,7 @@ class Job:
 
             if item['rtt'] == 0:
                  # ping must have failed, so skip this host
-                 log.info(f"Error: ping to {dst} failed")
+                 log.info(f"Error: rtt=0, ping to {dst} must have failed")
                  continue
 
             for iter in range(1, int(self.iters)+1):
@@ -526,7 +531,6 @@ class Job:
         stop_threads = False
         jthreads = list()
 
-        log.info (f"subrun: {self.pre_src_cmd}" )
         # handle pre-cmd invocation
         if self.pre_src_cmd:
             log.info (f"running pre_src_cmd: {self.pre_src_cmd}" )

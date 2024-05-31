@@ -42,8 +42,11 @@ class TestingDaemon:
         if self.log_file == "stdout":
             fh = logging.StreamHandler(sys.stdout)
         else:
-            fh = logging.handlers.RotatingFileHandler(
-                self.log_file, maxBytes=(1024*1024*8), backupCount=7)
+            # overwrite any existing file
+            fh = logging.FileHandler(self.log_file, mode='w')
+            # or if prefer to save all logs
+            #fh = logging.handlers.RotatingFileHandler(
+            #    self.log_file, maxBytes=(1024*1024*8), backupCount=7)
         fh.setFormatter(logging.Formatter(form))
         log.addHandler(fh)
         log.setLevel(level)
