@@ -9,6 +9,7 @@ import csv
 import sys
 import uuid
 import json
+import math
 from pathlib import Path
 from datetime import datetime
 from subprocess import PIPE, STDOUT
@@ -79,6 +80,7 @@ class Job:
         self.param_sweep = cfg.get('param-sweep', None)
         self.loss = cfg.get('netem-loss', None)
         self.lat = cfg.get('netem-lat', None)
+        self.statexec = cfg.get('statexec', None)
         self.limit = cfg.get('netem-limit', None)
         self.pacing = cfg.get('pacing', None)
         self.lat_sweep = cfg.get('lat-sweep', None)
@@ -230,12 +232,13 @@ class Job:
             rtt_ms = ping(ping_host, unit='ms')
 
             if rtt_ms is not None:
-                log.info(f"RTT to {host['hostname']}: {rtt_ms:.1f} ms")
+                log.info(f"RTT to {host['hostname']}: {rtt_ms:.2f} ms")
             else:
                 log.info(f"ping to {host['hostname']} FAILED. skipping this host")
                 rtt_ms = 0
             # store RTT in the host dict
-            host['rtt'] = int(rtt_ms)
+            #host['rtt'] = int(rtt_ms)
+            host['rtt'] = math.ceil(rtt_ms) # always round up so .1 does not become 0
 
             md.update(host)
             md.update({"profile_settings": self.profile_manager.get_profile(host)})
@@ -303,6 +306,8 @@ class Job:
 
     def _start_instr(self, dst, iter, ofname_suffix, interval=0.1):
         self.stop_instr = False
+
+
         # Collect ss stats
         if self.ss:
             ofname = os.path.join(self.outdir, f"ss:{ofname_suffix}")
@@ -357,7 +362,7 @@ class Job:
         else:
             initcmd = ["ssh", "-t", "-o", "StrictHostKeyChecking=no", hostname]
 
-        log.debug(f"run_host_cmd: Running \"{cmd}\" on \"{self.hostname}\", with output to file \"{ofname}\"")
+        log.debug(f"run_host_cmd: Running: \"{cmd}\" on \"{self.hostname}\", with output to file \"{ofname}\"")
         rcmd = initcmd + cmd.split(" ")
         log.debug(rcmd)
         try:
@@ -414,6 +419,7 @@ class Job:
             self._export_md(item)
 
             cmd = self.src_cmd.format(dst=dst)
+
             log.info(f"Testing {self.iters} times to {dst} using \"{cmd}\"")
 
             if item['rtt'] == 0:
@@ -539,12 +545,19 @@ class Job:
         # wait for a bit
         time.sleep(2)
 
+
         # start target (dst) cmd
         if self.dst_cmd:
             ofname = os.path.join(self.outdir, f"dst-cmd:{ofname_suffix}")
+            if self.statexec: 
+                 prom_fname = ofname+".prom"
+                 dst_cmd = f"/usr/local/bin/statexec -f {prom_fname} {self.dst_cmd}"
+                 log.info (f"statexec option set. Running command: {dst_cmd}")
+            else:
+                 dst_cmd = self.dst_cmd
             log.debug(f"Launching dst thread on host: {dst}")
             th = Thread(target=self._run_host_cmd,
-                                args=(dst, self.dst_cmd, ofname, (lambda: stop_threads)))
+                                args=(dst, dst_cmd, ofname, (lambda: stop_threads)))
             jthreads.append(th)
             th.start()
 
@@ -559,8 +572,14 @@ class Job:
               log.info (f"Running iteration {iter}/{self.iters}, command: {cmd}")
 
               ofname = os.path.join(self.outdir, f"src-cmd:{ofname_suffix}")
+              if self.statexec: 
+                   prom_fname = ofname+".prom"
+                   src_cmd = f"/usr/local/bin/statexec -f {prom_fname} {self.src_cmd}"
+                   log.info (f"statexec option set. Running command: {src_cmd} \n")
+              else:
+                   src_cmd = self.src_cmd
               th = Thread(target=self._run_host_cmd,
-                                args=(self.src, cmd, ofname, None))
+                                args=(self.src, src_cmd, ofname, None))
               th.start()
               th.join()
               time.sleep(2)
