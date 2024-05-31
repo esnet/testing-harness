@@ -237,13 +237,8 @@ class Job:
                 log.info(f"ping to {host['hostname']} FAILED. skipping this host")
                 rtt_ms = 0
             # store RTT in the host dict
-<<<<<<< HEAD
-            #host['rtt'] = int(rtt_ms)
-            host['rtt'] = math.ceil(rtt_ms) # always round up so .1 does not become 0
-=======
             host['rtt'] = float(rtt_ms)
             host['rtt'] = round(host['rtt'], 2)
->>>>>>> 4513bfb04ec097735330885b32c3c367979315ef
 
             md.update(host)
             md.update({"profile_settings": self.profile_manager.get_profile(host)})
@@ -363,11 +358,15 @@ class Job:
         if host == self.hostname or host in loopbacks or not host:
             initcmd = []
         elif self.user:
-            initcmd = ["ssh", "-l", self.user, "-t", "-o", "StrictHostKeyChecking=no", hostname]
+            initcmd = ["ssh", "-l", self.user, "-t", "-o", "StrictHostKeyChecking=no", host]
         else:
-            initcmd = ["ssh", "-t", "-o", "StrictHostKeyChecking=no", hostname]
+            initcmd = ["ssh", "-t", "-o", "StrictHostKeyChecking=no", host]
 
-        log.debug(f"run_host_cmd: Running: \"{cmd}\" on \"{self.hostname}\", with output to file \"{ofname}\"")
+        log.debug(f"run_host_cmd: Running: \"{cmd}\" on \"{host}\", with output to file \"{ofname}\"")
+        if host == None:
+            log.info(f"Error: host = None! Exitting")
+            sys.exit()
+            
         rcmd = initcmd + cmd.split(" ")
         log.debug(rcmd)
         try:
@@ -375,6 +374,7 @@ class Job:
         except Exception as e:
             log.info(f"Error running {rcmd}: {e}")
             return
+            sys.exit()
         outs = None
         errs = None
         if stop:
@@ -445,7 +445,7 @@ class Job:
                             status = os.system(pcmd)
                             #log.debug (f"netem script return code: %s " % status)
                         except:
-                            log.info ("Error setting netem, Exitting ")
+                            log.info ("Error setting netem, Exiting ")
                             sys.exit(-1)
                         time.sleep(5)
 
@@ -462,7 +462,7 @@ class Job:
                         try:
                             status = os.system(pcmd)
                         except:
-                            log.info ("Error setting netem, Exitting ")
+                            log.info ("Error setting netem, Exiting ")
                             sys.exit(-1)
                         time.sleep(5)
 
@@ -479,7 +479,7 @@ class Job:
                     try:
                         status = os.system(pcmd)
                     except:
-                        log.info ("Error setting netem, Exitting ")
+                        log.info ("Error setting netem, Exiting ")
                         sys.exit(-1)
                     time.sleep(5)
                     self.subrun(dst, cmd, iter, ofname_suffix)
@@ -508,7 +508,7 @@ class Job:
                 try:
                       os.system(pcmd)
                 except:
-                      log.info ("Error setting parameter value, Exitting ")
+                      log.info ("Error setting parameter value, Exiting ")
                       sys.exit(-1)
                 param = self.param_name.split('/')[-1]
                 if self.lat_sweep:
@@ -524,6 +524,9 @@ class Job:
 
 
     def subrun(self, dst, cmd, iter, ofname_suffix):
+        if dst == None:
+            log.info (f"ERROR: dst not set! ")
+            sys.exit()
         # Start instrumentation (per iter)
         if self.instrument:
              self._start_instr(dst, iter, ofname_suffix)
@@ -535,6 +538,7 @@ class Job:
         if self.pre_src_cmd:
             log.info (f"running pre_src_cmd: {self.pre_src_cmd}" )
             ofname = os.path.join(self.outdir, f"pre-src-cmd:{ofname_suffix}")
+
             th = Thread(target=self._run_host_cmd,
                                 args=(self.src, self.pre_src_cmd, ofname, (lambda: stop_threads)))
             jthreads.append(th)
@@ -555,8 +559,8 @@ class Job:
             ofname = os.path.join(self.outdir, f"dst-cmd:{ofname_suffix}")
             if self.statexec: 
                  prom_fname = ofname+".prom"
-                 dst_cmd = f"/usr/local/bin/statexec -f {prom_fname} {self.dst_cmd}"
-                 log.info (f"statexec option set. Running command: {dst_cmd}")
+                 dst_cmd = f"mkdir -p {self.outdir}; /usr/local/bin/statexec -f {prom_fname} {self.dst_cmd}"
+                 log.info (f"statexec option set. Running dst command: {dst_cmd}")
             else:
                  dst_cmd = self.dst_cmd
             log.debug(f"Launching dst thread on host: {dst}")
@@ -578,16 +582,19 @@ class Job:
               ofname = os.path.join(self.outdir, f"src-cmd:{ofname_suffix}")
               if self.statexec: 
                    prom_fname = ofname+".prom"
-                   src_cmd = f"/usr/local/bin/statexec -f {prom_fname} {self.src_cmd}"
-                   log.info (f"statexec option set. Running command: {src_cmd} \n")
+                   src_cmd = f"/usr/local/bin/statexec -f {prom_fname} {cmd}"
+                   log.info (f"statexec option set. Running src command: {src_cmd} \n")
               else:
-                   src_cmd = self.src_cmd
+                   src_cmd = cmd
               th = Thread(target=self._run_host_cmd,
-                                args=(self.src, src_cmd, ofname, None))
+                                args=(self.hostname, src_cmd, ofname, None))
               th.start()
               th.join()
               time.sleep(2)
-              log.debug("size of results file %s is %d" % (ofname, os.path.getsize(ofname)))
+              try:
+                  log.debug("size of results file %s is %d" % (ofname, os.path.getsize(ofname)))
+              except:
+                  log.debug("results file %s is not found" % (ofname))
               if os.path.getsize(ofname) > 1000 :
                  done = True
                  log.info (f"Test {iter} attempt {cnt} to host {dst} completed sucessfully...")
