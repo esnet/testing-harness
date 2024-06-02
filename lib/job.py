@@ -635,7 +635,7 @@ class Job:
             ofname = os.path.join(self.outdir, f"post-src-cmd:{ofname_suffix}")
             log.debug ("running post cmd: %s " % self.post_src_cmd)
             th = Thread(target=self._run_host_cmd,
-                                args=(self.src, self.post_src_cmd, ofname, None))
+                                args=(self.hostname, self.post_src_cmd, ofname, None))
             th.start()
             th.join()
 
