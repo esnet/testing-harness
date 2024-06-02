@@ -540,7 +540,7 @@ class Job:
             ofname = os.path.join(self.outdir, f"pre-src-cmd:{ofname_suffix}")
 
             th = Thread(target=self._run_host_cmd,
-                                args=(self.src, self.pre_src_cmd, ofname, (lambda: stop_threads)))
+                                args=(self.hostname, self.pre_src_cmd, ofname, (lambda: stop_threads)))
             jthreads.append(th)
             th.start()
         if self.pre_dst_cmd:
