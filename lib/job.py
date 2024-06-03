@@ -19,6 +19,7 @@ from lib.ss import launch_ss
 from lib.ss import ss_send_ampq
 from lib.tcpdump import launch_tcpdump
 from lib.tcptrace import launch_tcptrace
+from lib.mpstat import launch_mpstat
 from lib.ampq import AMPQSender
 from lib.profile import ProfileManager
 
@@ -75,6 +76,7 @@ class Job:
         self.ss = cfg.getboolean('ss', False)
         self.tcptrace = cfg.getboolean('tcptrace', False)
         self.tcpdump = cfg.getboolean('tcpdump', False)
+        self.mpstat = cfg.get('mpstat', None)
         self.tcpdump_filt = cfg.get('tcpdump-filt', None)
         self.iter_uuids = list()
         self.param_sweep = cfg.get('param-sweep', None)
@@ -95,6 +97,9 @@ class Job:
         # determine where our util/script files are located
         abspath = os.path.dirname(os.path.abspath(__file__))
         self.util_path = os.path.join(abspath, "..", "utils")
+
+        if self.tcpdump or self.mpstat or self.ss:
+            self.instrument = True
 
         if self.lat_sweep and self.limit_sweep :
             log.error ("Error: Can not specify both lat-sweeep and limit-sweep in the same test ")
@@ -307,7 +312,6 @@ class Job:
     def _start_instr(self, dst, iter, ofname_suffix, interval=0.1):
         self.stop_instr = False
 
-
         # Collect ss stats
         if self.ss:
             ofname = os.path.join(self.outdir, f"ss:{ofname_suffix}")
@@ -326,6 +330,14 @@ class Job:
                       'filter': self.tcpdump_filt
                       }
             self.td_thread = launch_tcpdump(params, lambda: self.stop_instr)
+
+        # Collect mpstat if enabled
+        if self.mpstat:
+            ofname = os.path.join(self.outdir, f"mpstat:{ofname_suffix}.json")
+            params = { 'outfile': ofname,
+                      'cores': self.mpstat,
+                      }
+            self.td_thread = launch_mpstat(params, lambda: self.stop_instr)
 
     def _stop_instr(self, dst, iter, ofname_suffix):
         self.stop_instr = True
@@ -527,7 +539,9 @@ class Job:
         if dst == None:
             log.info (f"ERROR: dst not set! ")
             sys.exit()
+
         # Start instrumentation (per iter)
+        # XXX: this breaks current version?? iperf server not connecting...
         if self.instrument:
              self._start_instr(dst, iter, ofname_suffix)
 
@@ -544,6 +558,7 @@ class Job:
             jthreads.append(th)
             th.start()
         if self.pre_dst_cmd:
+            log.info (f"running pre_dst_cmd: {self.pre_dst_cmd}" )
             ofname = os.path.join(self.outdir, f"pre-dst-cmd:{ofname_suffix}")
             th = Thread(target=self._run_host_cmd,
                                 args=(dst, self.pre_dst_cmd, ofname, (lambda: stop_threads)))
@@ -557,13 +572,16 @@ class Job:
         # start target (dst) cmd
         if self.dst_cmd:
             ofname = os.path.join(self.outdir, f"dst-cmd:{ofname_suffix}")
-            if self.statexec: 
+            if self.statexec:  # note: currently can do statexec or mpstat, but not both...
                  prom_fname = ofname+".prom"
                  dst_cmd = f"mkdir -p {self.outdir}; /usr/local/bin/statexec -f {prom_fname} {self.dst_cmd}"
                  log.info (f"statexec option set. Running dst command: {dst_cmd}")
+            elif self.mpstat: # XXX: currently hard coded for 60 sec test runs. maybe generalize someday?
+                 dst_cmd = f"mkdir -p {self.outdir} && nohup {self.dst_cmd} && mpstat -P {self.mpstat} -o JSON 2 30 > {ofname}.mpstat.json "
+                 log.info (f"mpstat option set. Running dst command: {dst_cmd}")
             else:
                  dst_cmd = self.dst_cmd
-            log.debug(f"Launching dst thread on host: {dst}")
+                 log.debug(f"running dst_cmd {dst_cmd} on host: {dst}")
             th = Thread(target=self._run_host_cmd,
                                 args=(dst, dst_cmd, ofname, (lambda: stop_threads)))
             jthreads.append(th)
@@ -586,6 +604,7 @@ class Job:
                    log.info (f"statexec option set. Running src command: {src_cmd} \n")
               else:
                    src_cmd = cmd
+              log.debug(f"running src_cmd: {src_cmd}")
               th = Thread(target=self._run_host_cmd,
                                 args=(self.hostname, src_cmd, ofname, None))
               th.start()
