@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # summarize all mpstat and iperf3 output in a directory tree
+# run with -h to see options
 
 import os
 import re
@@ -116,9 +117,18 @@ def write_to_csv(output_file, data, throughput_values):
                 })
     print(f"Results saved to {output_file}")
 
-def main(input_dir, output_format):
+def main(input_dir, output_format, output_file):
+
     all_cpu_loads = defaultdict(lambda: defaultdict(list))
     throughput_values = {}
+
+    if not output_file:
+        if output_format == 'csv':
+            output_file = 'test-summary.csv'
+        elif output_format == 'json':
+            output_file = 'test-summary.json'
+        else:
+            output_file = 'test-summary.txt'
 
     results = find_files()  # build a dict of filename, testname, IP
 
@@ -168,16 +178,15 @@ def main(input_dir, output_format):
     
     if overall_averages:
         if output_format == 'csv':
-            csv_file = 'mpstat-summary.csv'
-            write_to_csv(csv_file, overall_averages, throughput_values)
+            write_to_csv(output_file, overall_averages, throughput_values)
         elif output_format == 'json':
             output = {
                 f"{test_name} - {ip_address}": averages
                 for (test_name, ip_address), averages in overall_averages.items()
             }
-            with open('mpstat-summary.json', 'w') as f:
+            with open(output_file, 'w') as f:
                 json.dump(output, f, indent=4)
-            print(f"Results saved to mpstat-summary.json")
+            print(f"Results saved to file: ", output_file)
         else:
             print ("\nSummary of all testing: \n")
             for (test_name, ip_address), averages in overall_averages.items():
@@ -196,8 +205,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process JSON files to calculate average CPU metrics.')
     parser.add_argument('-i', '--input_dir', default='.', help='Input directory containing JSON files (default: current directory)')
     parser.add_argument('-f', '--format', choices=['human', 'json', 'csv'], default='human', help='Output format (default: human-readable)')
+    parser.add_argument('-o', '--output_file', help='Output filename (default = mpstat-summary.{csv,json,txt)')
 
     args = parser.parse_args()
 
-    main(args.input_dir, args.format)
+    main(args.input_dir, args.format, args.output_file)
 
