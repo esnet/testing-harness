@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 #
-# computes averages of mpstat JSON output for all .json files in a directory
+# computes averages of mpstat JSON output for all mpstat*.json files in a directory
+#
+# See script summarize_all_mpstat.py to summarize all files in a directory tree
 #
 import os
 import json
@@ -31,10 +33,14 @@ def calculate_averages(cpu_loads):
 
 def process_data(data):
     cpu_loads = defaultdict(list)
-    for host in data['sysstat']['hosts']:
-        for stat in host['statistics']:
-            for load in stat['cpu-load']:
-                cpu_loads[load['cpu']].append(load)
+    try:
+       for host in data['sysstat']['hosts']:
+           for stat in host['statistics']:
+               for load in stat['cpu-load']:
+                   cpu_loads[load['cpu']].append(load)
+    except:
+       print("Error in process_data. Corrupt input file?")
+       return
     
     print(f"Found {sum(len(loads) for loads in cpu_loads.values())} entries in this file")
     
@@ -71,7 +77,7 @@ def main(input_dir, output_file, output_format):
     all_cpu_loads = defaultdict(list)
 
     # Process each JSON file in the directory
-    for json_file in glob(os.path.join(input_dir, '*.json')):
+    for json_file in glob(os.path.join(input_dir, 'mpstat*.json')):
         print(f"Processing {json_file}...")
         with open(json_file, 'r') as f:
             data = json.load(f)
