@@ -101,40 +101,81 @@ def extract_throughput(src_cmd_file):
                     return tput
     return None
 
-def write_to_csv(output_file, data, throughput_values):
+
+def write_to_csv(output_file, cpu_data, throughput_values):
+
     with open(output_file, 'w', newline='') as csvfile:
-        fieldnames = ['IP', 'test_name', 'ave_thruput', 'max_thruput', 'stdev_tput', 'CPU number', 'cpu_user', 'cpu_sys', 'cpu_soft', 'cpu_irq', 'cpu_idle']
+        fieldnames = ['IP', 'test_name', 'ave_thruput', 'max_thruput', 'stdev_tput', 'snd_or_rcv', 'CPU_number', 'cpu_user', 'cpu_sys', 'cpu_soft', 'cpu_irq', 'cpu_idle']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        for (test_name, ip_address, type), averages in data:
-            for cpu, avg in averages.items():
-                ave_throughput = throughput_values.get((test_name, ip_address), [])
-                if len(ave_throughput) == 0:
-                      continue
-                if len(ave_throughput) > 5:  # XXX: for debugging/sanity checking
-                      print("Warning: have > 5 throughput values for this test. Is this intentional?")
-                #print (f"in write_to_csv, test: {test_name}, IP: {ip_address}, ave_throughput: {ave_throughput}")
-                ave_tput = round(statistics.mean(ave_throughput),2) if ave_throughput else None
-                max_throughput = max(ave_throughput, default=None)
-                #print (f"in write_to_csv, ave tput: {ave_tput}, max_tput: {max_throughput}")
-                stdev_throughput = round(statistics.stdev(ave_throughput), 2) if len(ave_throughput) > 1 else None
+        for entry in cpu_data:
+            (test_name, ip_address, type), averages = entry
+            ave_throughput = throughput_values.get((test_name, ip_address), [])
+            if len(ave_throughput) == 0:
+                continue
+            if len(ave_throughput) > 5:
+                print("Warning: have > 5 throughput values for this test. Is this intentional?")
+            ave_tput = round(statistics.mean(ave_throughput), 2) if ave_throughput else None
+            max_throughput = max(ave_throughput, default=None)
+            stdev_throughput = round(statistics.stdev(ave_throughput), 2) if len(ave_throughput) > 1 else None
 
-                # XXXX fixme: output sender and receiver CPU
+            # Initialize a row with common values
+            row = {
+                'IP': ip_address,
+                'test_name': test_name,
+                'ave_thruput': ave_tput,
+                'max_thruput': max_throughput,
+                'stdev_tput': stdev_throughput,
+                'snd_or_rcv': type,
+            }
+
+            # Write row for each CPU, filling in CPU metrics
+            for cpu, avg in averages.items():
+                row['CPU_number'] = cpu
+                row['cpu_user'] = avg.get('usr', '')
+                row['cpu_sys'] = avg.get('sys', '')
+                row['cpu_soft'] = avg.get('soft', '')
+                row['cpu_irq'] = avg.get('irq', '')
+                row['cpu_idle'] = avg.get('idle', '')
+                writer.writerow(row)
+
             
-                writer.writerow({
-                    'IP': ip_address,
-                    'test_name': test_name,
-                    'ave_thruput': ave_tput,
-                    'max_thruput': max_throughput,
-                    'stdev_tput': stdev_throughput,
-                    'CPU number': cpu,
-                    'cpu_user': avg.get('usr', ''),
-                    'cpu_sys': avg.get('sys', ''),
-                    'cpu_soft': avg.get('soft', ''),
-                    'cpu_irq': avg.get('irq', ''),
-                    'cpu_idle': avg.get('idle', '')
-                })
     print(f"Results saved to {output_file}")
+
+def write_to_json(output_file, cpu_averages, throughput_values):
+
+    output = {}
+    for entry in cpu_averages:
+        (test_name, ip_address, type), averages = entry
+        if len(throughput_values.get((test_name, ip_address), [])) == 0:
+            continue
+        avg_throughput = round(statistics.mean(throughput_values.get((test_name, ip_address), [])), 2)
+        max_throughput = round(max(throughput_values.get((test_name, ip_address), []), default=None), 2)
+        stdev_throughput = round(statistics.stdev(throughput_values.get((test_name, ip_address), [])), 2) if len(throughput_values.get((test_name, ip_address), [])) > 1 else None
+
+        cpu_averages_data = {
+            "sender": {},
+            "receiver": {}
+        }
+
+        for cpu, avg in averages.items():
+            cpu_type = "sender" if type == "mpstat_snd" else "receiver"
+            cpu_averages_data[cpu_type][f"CPU {cpu}"] = {key: round(value, 2) for key, value in avg.items()}
+
+        output[f"{test_name} - {ip_address}"] = {
+            "test_name": test_name,
+            "IP": ip_address,
+            "average_throughput": avg_throughput,
+            "max_throughput": max_throughput,
+            "stdev_throughput": stdev_throughput,
+            "cpu_averages": cpu_averages_data
+        }
+
+    with open(output_file, 'w') as f:
+        json.dump(output, f, indent=4)
+    print(f"Results saved to file: {output_file}")
+
+
 
 def main(input_dir, output_format, output_file):
 
@@ -225,13 +266,7 @@ def main(input_dir, output_format, output_file):
         if output_format == 'csv':
             write_to_csv(output_file, sorted_averages, throughput_values)
         elif output_format == 'json':
-            output = {
-                f"{test_name} - {ip_address}": averages
-                for (test_name, ip_address, type), averages in overall_averages.items()
-            }
-            with open(output_file, 'w') as f:
-                json.dump(output, f, indent=4)
-            print(f"Results saved to file: ", output_file)
+            write_to_json(output_file, sorted_averages, throughput_values)
         else:
             print ("\nSummary of all testing: \n")
             for (test_name, ip_address, type), averages in sorted_averages:
