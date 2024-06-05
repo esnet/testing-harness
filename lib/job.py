@@ -333,7 +333,7 @@ class Job:
 
         # Collect mpstat if enabled
         if self.mpstat:
-            ofname = os.path.join(self.outdir, f"mpstat:{ofname_suffix}.json")
+            ofname = os.path.join(self.outdir, f"mpstat-sender:{ofname_suffix}.json")
             params = { 'outfile': ofname,
                       'cores': self.mpstat,
                       }
@@ -353,6 +353,7 @@ class Job:
                 proc = subprocess.Popen(cmd, stdout=PIPE, stderr=STDOUT, shell=True)
             except Exception as e:
                 log.info(f"Error running {cmd}: {e}")
+                sys.exit() 
                 return
             ss_json = f"{self.outdir}/ss:{ofname_suffix}.json"
             log.debug(f"send ss results from file {ss_json} to archive {self.archive}")
@@ -385,8 +386,8 @@ class Job:
             proc = subprocess.Popen(rcmd, stdout=PIPE, stderr=STDOUT)
         except Exception as e:
             log.info(f"Error running {rcmd}: {e}")
-            return
             sys.exit()
+            return
         outs = None
         errs = None
         if stop:
@@ -577,7 +578,8 @@ class Job:
                  dst_cmd = f"mkdir -p {self.outdir}; /usr/local/bin/statexec -f {prom_fname} {self.dst_cmd}"
                  log.info (f"statexec option set. Running dst command: {dst_cmd}")
             elif self.mpstat: # XXX: currently hard coded for 60 sec test runs. maybe generalize someday?
-                 dst_cmd = f"mkdir -p {self.outdir} && nohup {self.dst_cmd} && mpstat -P {self.mpstat} -o JSON 2 30 > {ofname}.mpstat.json "
+                 mpstat_fname = os.path.join(self.outdir, f"mpstat-receiver:{ofname_suffix}.json")
+                 dst_cmd = f"mkdir -p {self.outdir} && nohup {self.dst_cmd} && mpstat -P {self.mpstat} -o JSON 2 30 > {mpstat_fname}"
                  log.info (f"mpstat option set. Running dst command: {dst_cmd}")
             else:
                  dst_cmd = self.dst_cmd
@@ -622,10 +624,22 @@ class Job:
                  log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED. Giving up ...")
               else:
                  log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED, trying again...")
+                 sys.exit()  # XXX: for now, exit to try to figure out why it failed
+                 log.debug (f"debug: self.dst_cmd = {self.dst_cmd}")
+                 if self.dst_cmd:  # XXX: this does not work, as 'self' in this thread is differnt...
+                     log.debug(f"attempting to restart dst_cmd {dst_cmd} on host: {dst}")
+                     thr = Thread(target=self._run_host_cmd,
+                                args=(dst, dst_cmd, ofname, (lambda: stop_threads)))
+                     jthreads.append(thr)
+                     thr.start()
                  try:
                      with open(ofname, "r") as file:
                          file_contents = file.read()
                          log.info(f"job output file contains: {file_contents}")
+                         file_contents_lower = file_contents.lower()
+                         if "error" in file_contents_lower:
+                             log.info(f"Error running command: {src_cmd}")
+                             sys.exit()  # XXX: exit for now to figure out error
                  except:
                      log.error(f"output file '{ofname}' not found.")
 

@@ -138,6 +138,7 @@ def main():
 
     app = TestingDaemon(conf)
     app.start()
+    log.info("All Tests Complete. Exiting.")
 
 
 if __name__ == "__main__":

@@ -31,18 +31,20 @@ def mpstat_thread(params, stop):
     outfile = params['outfile']
     cores = params['cores']
 
-    mpstat_cmd = f"mpstat -P {cores} -o JSON 2 > {outfile} "
+    # XXX: assumes 60 second tests, and dont want to use killall, as then the JSON file will be corrupted
+    # capturign 28 2 second intervals to make sure mpstat finishes first
+    mpstat_cmd = f"mpstat -P {cores} -o JSON 2 28 > {outfile} "
     proc = run(mpstat_cmd)
     if stop:
         while not stop():
             time.sleep(1)
-        kill = run("killall -q mpstat")
-        kill.wait()
-        proc.terminate()
-        try:
-            proc.wait(timeout=1)
-        except TimeoutExpired:
-            proc.kill()
+#        kill = run("killall -q mpstat")
+#        kill.wait()
+#        proc.terminate()
+#        try:
+#            proc.wait(timeout=1)
+#        except TimeoutExpired:
+#            proc.kill()
 
 
 def launch_mpstat(params, stop):

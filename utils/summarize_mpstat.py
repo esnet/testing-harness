@@ -2,7 +2,7 @@
 #
 # computes averages of mpstat JSON output for all mpstat*.json files in a directory
 #
-# See script summarize_all_mpstat.py to summarize all files in a directory tree
+# See script summarize_all.py to summarize all src-cmd and mpstat files in a directory tree
 #
 import os
 import json
