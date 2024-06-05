@@ -337,7 +337,7 @@ class Job:
             params = { 'outfile': ofname,
                       'cores': self.mpstat,
                       }
-            self.td_thread = launch_mpstat(params, lambda: self.stop_instr)
+            self.mp_thread = launch_mpstat(params, lambda: self.stop_instr)
 
     def _stop_instr(self, dst, iter, ofname_suffix):
         self.stop_instr = True
@@ -366,6 +366,8 @@ class Job:
                     launch_tcptrace(ofname, self.outdir, dst, iter, self.archive, self.iter_uuids[iter-1])
                 except Exception as e:
                     log.error(f"Failed to collect tcptrace stats for {dst}: {e}")
+        if self.mpstat:
+            self.mp_thread.join()
 
     def _run_host_cmd(self, host, cmd, ofname, stop):
         if host == self.hostname or host in loopbacks or not host:
@@ -377,8 +379,8 @@ class Job:
 
         log.debug(f"run_host_cmd: Running: \"{cmd}\" on \"{host}\", with output to file \"{ofname}\"")
         if host == None:
-            log.info(f"Error: host = None! Exitting")
-            sys.exit()
+            log.info(f"Error: host = None! Exiting")
+            sys.exit() # does not kill threads
             
         rcmd = initcmd + cmd.split(" ")
         log.debug(rcmd)
@@ -623,15 +625,15 @@ class Job:
                  done = True
                  log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED. Giving up ...")
               else:
-                 log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED, trying again...")
-                 sys.exit()  # XXX: for now, exit to try to figure out why it failed
-                 log.debug (f"debug: self.dst_cmd = {self.dst_cmd}")
-                 if self.dst_cmd:  # XXX: this does not work, as 'self' in this thread is differnt...
-                     log.debug(f"attempting to restart dst_cmd {dst_cmd} on host: {dst}")
-                     thr = Thread(target=self._run_host_cmd,
-                                args=(dst, dst_cmd, ofname, (lambda: stop_threads)))
-                     jthreads.append(thr)
-                     thr.start()
+                 # for pscheduler it makes sense to try again, but for iperf3, best to exit and figure out what is wrong
+                 #log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED, trying again...")
+
+                 # XXX: make retry vs exit a command line option?
+                 pid = os.getpid()
+                 log.info (f"Test to host {dst} FAILED, Exiting by killing pid {pid}...")
+                 subprocess.run(f"kill -9 {pid}", shell=True)
+                 #sys.exit()  # does not kill threads
+
                  try:
                      with open(ofname, "r") as file:
                          file_contents = file.read()
