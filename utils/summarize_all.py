@@ -10,9 +10,10 @@ import argparse
 import csv
 import sys
 from collections import defaultdict
+import statistics
 
 def calculate_averages(cpu_loads):
-# note: this routine is use to calculate average for within a test, AND for set of tests
+    # note: this routine is use to calculate average for within a test, AND for set of tests
 
     if not cpu_loads:
         print("calculate_averages Error: no cpu data provided")
@@ -53,34 +54,37 @@ def process_cpu_data(data):
 
 def find_files():
     cwd = os.getcwd()
-    mpstat_pattern = re.compile(r"mpstat:(\d+\.\d+\.\d+\.\d+):.*\.json")
+    mpstat_snd_pattern = re.compile(r"mpstat:(\d+\.\d+\.\d+\.\d+):.*\.json")
+    mpstat_rcv_pattern = re.compile(r"mpstat-receiver:(\d+\.\d+\.\d+\.\d+):.*\.json")
     src_cmd_pattern = re.compile(r"src-cmd:(\d+\.\d+\.\d+\.\d+):.*")
 
     results = []
 
     for root, dirs, files in os.walk(cwd):
-        mpstat_count = 0
-        src_cmd_count = 0
+        file_cnt = 0
         for file in files:
-            mpstat_match = mpstat_pattern.match(file)
+            mpstat_snd_match = mpstat_snd_pattern.match(file)
+            mpstat_rcv_match = mpstat_rcv_pattern.match(file)
             src_cmd_match = src_cmd_pattern.match(file)
-            if mpstat_match:
-                ip_address = mpstat_match.group(1)
-                test_name = os.path.basename(root)
-                results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name})
-                mpstat_count += 1
-            elif src_cmd_match:
-                ip_address = src_cmd_match.group(1)
-                test_name = os.path.basename(root)
-                results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name})
-                src_cmd_count += 1
+            test_name = os.path.basename(root)
+            if mpstat_snd_match:
+                file_cnt += 1
+                ip_address = mpstat_snd_match.group(1) 
+                results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "mpstat_snd"})
+            if mpstat_rcv_match:
+                file_cnt += 1
+                ip_address = mpstat_rcv_match.group(1) 
+                results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "mpstat_rcv"})
+            if src_cmd_match:
+                file_cnt += 1
+                ip_address = src_cmd_match.group(1) 
+                results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "src_cmd"})
 
-        file_count = mpstat_count + src_cmd_count
-        if file_count == 0:
+
+
+        if file_cnt == 0:
             print(f"No relevant files found in directory: {root}. Skipping...")
             continue
-
-        #print(f"In directory {root}: Found {mpstat_count} mpstat files and {src_cmd_count} src-cmd files")
 
     #print ("will look at these files: ", results)
     return results
@@ -99,15 +103,30 @@ def extract_throughput(src_cmd_file):
 
 def write_to_csv(output_file, data, throughput_values):
     with open(output_file, 'w', newline='') as csvfile:
-        fieldnames = ['IP', 'test_name', 'thruput', 'CPU number', 'cpu_user', 'cpu_sys', 'cpu_soft', 'cpu_irq', 'cpu_idle']
+        fieldnames = ['IP', 'test_name', 'ave_thruput', 'max_thruput', 'stdev_tput', 'CPU number', 'cpu_user', 'cpu_sys', 'cpu_soft', 'cpu_irq', 'cpu_idle']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        for (test_name, ip_address), averages in data.items():
+        for (test_name, ip_address, type), averages in data:
             for cpu, avg in averages.items():
+                ave_throughput = throughput_values.get((test_name, ip_address), [])
+                if len(ave_throughput) == 0:
+                      continue
+                if len(ave_throughput) > 5:  # XXX: for debugging/sanity checking
+                      print("Warning: have > 5 throughput values for this test. Is this intentional?")
+                #print (f"in write_to_csv, test: {test_name}, IP: {ip_address}, ave_throughput: {ave_throughput}")
+                ave_tput = round(statistics.mean(ave_throughput),2) if ave_throughput else None
+                max_throughput = max(ave_throughput, default=None)
+                #print (f"in write_to_csv, ave tput: {ave_tput}, max_tput: {max_throughput}")
+                stdev_throughput = round(statistics.stdev(ave_throughput), 2) if len(ave_throughput) > 1 else None
+
+                # XXXX fixme: output sender and receiver CPU
+            
                 writer.writerow({
                     'IP': ip_address,
                     'test_name': test_name,
-                    'thruput': throughput_values.get((test_name, ip_address), ''),
+                    'ave_thruput': ave_tput,
+                    'max_thruput': max_throughput,
+                    'stdev_tput': stdev_throughput,
                     'CPU number': cpu,
                     'cpu_user': avg.get('usr', ''),
                     'cpu_sys': avg.get('sys', ''),
@@ -119,8 +138,9 @@ def write_to_csv(output_file, data, throughput_values):
 
 def main(input_dir, output_format, output_file):
 
-    all_cpu_loads = defaultdict(lambda: defaultdict(list))
-    throughput_values = {}
+    snd_cpu_loads = defaultdict(lambda: defaultdict(list))
+    rcv_cpu_loads = defaultdict(lambda: defaultdict(list))
+    throughput_values = defaultdict(list)
 
     if not output_file:
         if output_format == 'csv':
@@ -130,24 +150,25 @@ def main(input_dir, output_format, output_file):
         else:
             output_file = 'test-summary.txt'
 
-    results = find_files()  # build a dict of filename, testname, IP
+    results = find_files()  # build a dict of filename, testname, IP, type
 
     print ("\nCollecting Results from all files...")
     for result in results:
         input_file = result['file']  # includes full path
         test_name = result['test_name']
         ip_address = result['ip_address']
+        type = result['type']
         
         #print ("loading file: ", input_file)
         fname = os.path.basename(input_file)
-        if fname.startswith('src-cmd'):
+        if type == 'src_cmd':
             #print ("Extracting throughput from file: ", input_file)
             throughput = extract_throughput(input_file)
             if throughput is not None:
-                throughput_values[(test_name, ip_address)] = throughput
+                throughput_values[(test_name, ip_address)].append(throughput)
             else:
                 print (f"   Throughput not found in file {input_file}")
-        elif fname.startswith('mpstat'):
+        if type == 'mpstat_snd' or type == 'mpstat_rcv':
             with open(input_file, 'r') as f:
                 try:
                     data = json.load(f)
@@ -157,44 +178,76 @@ def main(input_dir, output_format, output_file):
                     print("   Error loading file: ", filename_with_parent)
                     sys.exit()
                     continue
+
                 averages, cpu_loads = process_cpu_data(data)
 
                 for cpu, loads in cpu_loads.items():
-                    all_cpu_loads[(test_name, ip_address)][cpu].extend(loads)
+                    if type == 'mpstat_snd':
+                        snd_cpu_loads[(test_name, ip_address)][cpu].extend(loads)
+                    else:
+                        rcv_cpu_loads[(test_name, ip_address)][cpu].extend(loads)
 
+    print(f"\n Got mpstat data from {len(snd_cpu_loads)} sender files and {len(rcv_cpu_loads)} receiver files")
     overall_averages = {}
     print ("\nComputing CPU Averages...")
-    #overall_averages = {cpu: calculate_averages(loads) for cpu, loads in all_cpu_loads.items() if loads}  # compact version
-    for (test_name, ip_address), cpu_data in all_cpu_loads.items():
+    for (test_name, ip_address), cpu_data in snd_cpu_loads.items():
         averages = {}
-        #print("cpu_data.items: ",cpu_data.items())
+        #print("snd_cpu_data.items: ",snd_cpu_data.items())
 
         for cpu, loads in cpu_data.items():
             #print ("  in loop: loads = ", loads)
             if loads:
                 averages[cpu] = calculate_averages(loads)
                 #print (f"   CPU {cpu} averages for test {test_name}  IP {ip_address} ", averages[cpu])
-        overall_averages[(test_name, ip_address)] = averages
+        overall_averages[(test_name, ip_address, 'sender')] = averages
+
+    for (test_name, ip_address), cpu_data in rcv_cpu_loads.items():
+        averages = {}
+        #print("rcv_cpu_data.items: ",rcv_cpu_data.items())
+
+        for cpu, loads in cpu_data.items():
+            #print ("  in loop: loads = ", loads)
+            if loads:
+                averages[cpu] = calculate_averages(loads)
+                #print (f"   CPU {cpu} averages for test {test_name}  IP {ip_address} ", averages[cpu])
+        overall_averages[(test_name, ip_address, 'receiver')] = averages
+
     
     if overall_averages:
+        # Sort the dictionary by test_name and ip_address
+        #sorted_averages = sorted( overall_averages.items(), key=lambda x: (x[0][0], x[0][1]))
+
+        # to sort just by test_name
+        sorted_averages = sorted(overall_averages.items(), key=lambda x: (x[0][0]))
+        overall_averages = dict(sorted_averages)  # Convert back to dictionary if needed
+
+
         if output_format == 'csv':
-            write_to_csv(output_file, overall_averages, throughput_values)
+            write_to_csv(output_file, sorted_averages, throughput_values)
         elif output_format == 'json':
             output = {
                 f"{test_name} - {ip_address}": averages
-                for (test_name, ip_address), averages in overall_averages.items()
+                for (test_name, ip_address, type), averages in overall_averages.items()
             }
             with open(output_file, 'w') as f:
                 json.dump(output, f, indent=4)
             print(f"Results saved to file: ", output_file)
         else:
             print ("\nSummary of all testing: \n")
-            for (test_name, ip_address), averages in overall_averages.items():
-               if (test_name, ip_address) in throughput_values and throughput_values[(test_name, ip_address)] is not None:
-                   print(f"Average Throughput for test {test_name} to Host: {ip_address}: {throughput_values[(test_name, ip_address)]:.2f} Gbps")
-                   for cpu, avg in averages.items():
-                        avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
-                        print(f"   CPU {cpu}:   {avg_str}")
+            for (test_name, ip_address, type), averages in sorted_averages:
+               if (test_name, ip_address) in throughput_values and throughput_values[(test_name, ip_address)]:
+                   avg_throughput = statistics.mean(throughput_values[(test_name, ip_address)])
+                   max_throughput = max(throughput_values[(test_name, ip_address)])
+                   stdev_throughput = statistics.stdev(throughput_values[(test_name, ip_address)])
+                   print(f"Ave Tput for test {test_name} to Host: {ip_address}: {avg_throughput:.2f} Gbps, Max: {max_throughput:.2f} Gbps,  stdev: {stdev_throughput:.2f}")
+                   if type == 'sender':
+                       for cpu, avg in averages.items():
+                            avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
+                            print(f"  Sender CPU {cpu}:   {avg_str}")
+                   else:
+                       for cpu, avg in averages.items():
+                            avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
+                            print(f"  Receiver CPU {cpu}:   {avg_str}")
                    print()
                else:
                    print(f"\nNo throughput data available for test {test_name} to Host: {ip_address}")
@@ -210,4 +263,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.input_dir, args.format, args.output_file)
+
 
