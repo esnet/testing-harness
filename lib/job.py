@@ -592,6 +592,7 @@ class Job:
             th.start()
 
         # wait for a bit more
+        log.debug(f"Sleeping for 5 seconds to let dst_cmd start")
         time.sleep(5)
 
         # finally, start and wait on src cmd (will block)
@@ -620,32 +621,33 @@ class Job:
                   log.debug("results file %s is not found" % (ofname))
               if os.path.getsize(ofname) > 1000 :
                  done = True
-                 log.info (f"Test {iter} attempt {cnt} to host {dst} completed sucessfully...")
-              elif cnt > 4:
-                 done = True
-                 log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED. Giving up ...")
+                 #log.info (f"Test {iter} attempt {cnt} to host {dst} completed sucessfully...")
+                 log.info (f"Test {iter} to host {dst} completed sucessfully...")
+              #elif cnt > 4:
+              #   done = True
+              #   log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED. Giving up ...")
               else:
-                 # for pscheduler it makes sense to try again, but for iperf3, best to exit and figure out what is wrong
-                 #log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED, trying again...")
-
-                 # XXX: make retry vs exit a command line option?
-                 pid = os.getpid()
-                 log.info (f"Test to host {dst} FAILED, Exiting by killing pid {pid}...")
-                 subprocess.run(f"kill -9 {pid}", shell=True)
-                 #sys.exit()  # does not kill threads
-
-                 try:
+                 try:  # get more info on the error
                      with open(ofname, "r") as file:
                          file_contents = file.read()
                          log.info(f"job output file contains: {file_contents}")
-                         file_contents_lower = file_contents.lower()
-                         if "error" in file_contents_lower:
-                             log.info(f"Error running command: {src_cmd}")
-                             sys.exit()  # XXX: exit for now to figure out error
                  except:
                      log.error(f"output file '{ofname}' not found.")
 
-                 time.sleep(2)
+                 log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED, trying again...")
+
+                 if self.dst_cmd:  # if there is a dst_cmd, there is a good chance that is the process that failed, so run it again
+                      #Try to restart server..
+                      # XXX: FIXME: assumes iperf3 with mpstat! need to generalize this
+                      mpstat_fname = os.path.join(self.outdir, f"mpstat-receiver:{ofname_suffix}.json")
+                      dst_cmd = f"mkdir -p {self.outdir} && nohup {self.dst_cmd} && mpstat -P {self.mpstat} -o JSON 2 30 > {mpstat_fname}"
+                      log.info(f"restarting iperf3 server: running dst_cmd {dst_cmd} on host: {dst}")
+                      th = Thread(target=self._run_host_cmd,
+                                args=(dst, dst_cmd, ofname, (lambda: stop_threads)))
+                      jthreads.append(th)
+                      th.start()
+
+                 time.sleep(5)
                  cnt += 1
 
         # invoke a callback with some context
