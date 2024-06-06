@@ -623,9 +623,9 @@ class Job:
                  done = True
                  #log.info (f"Test {iter} attempt {cnt} to host {dst} completed sucessfully...")
                  log.info (f"Test {iter} to host {dst} completed sucessfully...")
-              #elif cnt > 4:
-              #   done = True
-              #   log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED. Giving up ...")
+              elif cnt > 4:
+                 done = True
+                 log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED. Giving up ...")
               else:
                  try:  # get more info on the error
                      with open(ofname, "r") as file:
@@ -636,11 +636,13 @@ class Job:
 
                  log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED, trying again...")
 
-                 if self.dst_cmd:  # if there is a dst_cmd, there is a good chance that is the process that failed, so run it again
+                 # if there is a dst_cmd, there is a good chance that is the process that failed, so run it again
+                 # for some unknown reason this happens with iperf3 server fairly often
+                 if self.dst_cmd:  
                       #Try to restart server..
                       # XXX: FIXME: assumes iperf3 with mpstat! need to generalize this
                       mpstat_fname = os.path.join(self.outdir, f"mpstat-receiver:{ofname_suffix}.json")
-                      dst_cmd = f"mkdir -p {self.outdir} && nohup {self.dst_cmd} && mpstat -P {self.mpstat} -o JSON 2 30 > {mpstat_fname}"
+                      dst_cmd = f"killall iperf3 && nohup {self.dst_cmd} && mpstat -P {self.mpstat} -o JSON 2 30 > {mpstat_fname}"
                       log.info(f"restarting iperf3 server: running dst_cmd {dst_cmd} on host: {dst}")
                       th = Thread(target=self._run_host_cmd,
                                 args=(dst, dst_cmd, ofname, (lambda: stop_threads)))
