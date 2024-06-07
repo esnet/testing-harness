@@ -12,11 +12,11 @@ import sys
 from collections import defaultdict
 import statistics
 
-def calculate_averages(cpu_loads):
+def calculate_cpu_averages(cpu_loads):
     # note: this routine is use to calculate average for within a test, AND for set of tests
 
     if not cpu_loads:
-        print("calculate_averages Error: no cpu data provided")
+        print("calculate_cpu_averages Error: no cpu data provided")
         return None
 
     # Initialize sums and count
@@ -32,9 +32,9 @@ def calculate_averages(cpu_loads):
             sums[key] += load[key]
         count += 1
 
-    # Calculate averages
+    # Calculate CPU averages
     averages = {key: round(value / count, 2) for key, value in sums.items() if value != 0}
-    #print ("   calculate_averages returns: ", averages)
+    #print ("   calculate_cpu_averages returns: ", averages)
     return averages
 
 def process_cpu_data(data):
@@ -48,7 +48,7 @@ def process_cpu_data(data):
     for cpu, loads in cpu_loads.items():
         cpu_loads[cpu] = loads[4:-1]
 
-    averages = {cpu: calculate_averages(loads) for cpu, loads in cpu_loads.items() if loads}
+    averages = {cpu: calculate_cpu_averages(loads) for cpu, loads in cpu_loads.items() if loads}
     #print ("process_cpu_data returns: ", cpu_loads)
     return averages, cpu_loads
 
@@ -92,15 +92,20 @@ def extract_throughput(src_cmd_file):
         for line in f:
             if 'sender' in line and 'CPU' not in line:
                 # XXX: what if Mbits/sec, not Gbits??
-                throughput = re.search(r'(\d+\.\d+) Gbits/sec', line)
+                #throughput = re.search(r'(\d+\.\d+) Gbits/sec', line)
+                throughput = re.search(r'(\d+\.\d+)\s*Gbits/sec\s*(\d+)', line)
+
                 if throughput:
                     tput = float(throughput.group(1)) # group(1) ensures a single number
+                    retrans = int(throughput.group(2))
                     #print ("   extract_throughput returns: ", tput)
-                    return tput
-    return None
+                    return tput, retrans
+    # If no throughput data is found, return None for both throughput and retrans
+    return None, None
 
 
-def write_to_csv(output_file, cpu_data, throughput_values):
+def write_to_csv(output_file, cpu_data, throughput_values, retrans_values):
+   # XXX: need to add retrans!
 
     with open(output_file, 'w', newline='') as csvfile:
         fieldnames = ['IP', 'test_name', 'ave_thruput', 'max_thruput', 'stdev_tput', 'snd_or_rcv', 'CPU_number', 'cpu_user', 'cpu_sys', 'cpu_soft', 'cpu_irq', 'cpu_idle']
@@ -140,7 +145,8 @@ def write_to_csv(output_file, cpu_data, throughput_values):
             
     print(f"Results saved to {output_file}")
 
-def write_to_json(output_file, cpu_averages, throughput_values):
+def write_to_json(output_file, cpu_averages, throughput_values, retrans_values):
+   # XXX: need to add retrans!
 
     output = {}
     for entry in cpu_averages:
@@ -180,6 +186,7 @@ def main(input_dir, output_format, output_file):
     snd_cpu_loads = defaultdict(lambda: defaultdict(list))
     rcv_cpu_loads = defaultdict(lambda: defaultdict(list))
     throughput_values = defaultdict(list)
+    retrans_values = defaultdict(list)
 
     if not output_file:
         if output_format == 'csv':
@@ -202,9 +209,10 @@ def main(input_dir, output_format, output_file):
         fname = os.path.basename(input_file)
         if type == 'src_cmd':
             #print ("Extracting throughput from file: ", input_file)
-            throughput = extract_throughput(input_file)
+            throughput, retrans = extract_throughput(input_file)
             if throughput is not None:
                 throughput_values[(test_name, ip_address)].append(throughput)
+                retrans_values[(test_name, ip_address)].append(retrans)
             else:
                 print (f"   Throughput not found in file {input_file}")
         if type == 'mpstat_snd' or type == 'mpstat_rcv':
@@ -228,62 +236,63 @@ def main(input_dir, output_format, output_file):
                         rcv_cpu_loads[(test_name, ip_address)][cpu].extend(loads)
 
     print(f"\n Got mpstat data from {len(snd_cpu_loads)} sender files and {len(rcv_cpu_loads)} receiver files")
-    overall_averages = {}
+    overall_cpu_averages = {}
     print ("\nComputing CPU Averages...")
     for (test_name, ip_address), cpu_data in snd_cpu_loads.items():
-        averages = {}
+        cpu_averages = {}
         #print("snd_cpu_data.items: ",snd_cpu_loads.items())
 
         for cpu, loads in cpu_data.items():
             #print ("  in loop: loads = ", loads)
             if loads:
-                averages[cpu] = calculate_averages(loads)
-                #print (f"   CPU {cpu} averages for test {test_name}  IP {ip_address} ", averages[cpu])
-        overall_averages[(test_name, ip_address, 'sender')] = averages
+                cpu_averages[cpu] = calculate_cpu_averages(loads)
+                #print (f"   CPU {cpu} averages for test {test_name}  IP {ip_address} ", cpu_averages[cpu])
+        overall_cpu_averages[(test_name, ip_address, 'sender')] = cpu_averages
 
     for (test_name, ip_address), cpu_data in rcv_cpu_loads.items():
-        averages = {}
+        cpu_averages = {}
 
         for cpu, loads in cpu_data.items():
             if loads:
-                averages[cpu] = calculate_averages(loads)
-        overall_averages[(test_name, ip_address, 'receiver')] = averages
+                cpu_averages[cpu] = calculate_cpu_averages(loads)
+        overall_cpu_averages[(test_name, ip_address, 'receiver')] = cpu_averages
 
-    if overall_averages:
+    if overall_cpu_averages:
         # Sort the dictionary by test_name and ip_address
-        #sorted_averages = sorted( overall_averages.items(), key=lambda x: (x[0][0], x[0][1]))
-        # Sort the dictionary by ip_address, then test_name
-        sorted_averages = sorted( overall_averages.items(), key=lambda x: (x[0][1], x[0][0]))
-        overall_averages = dict(sorted_averages)  # Convert back to dictionary if needed
+        sorted_cpu_averages = sorted( overall_cpu_averages.items(), key=lambda x: (x[0][0], x[0][1]))
+        overall_cpu_averages = dict(sorted_cpu_averages)  # Convert back to dictionary if needed
 
         if output_format == 'csv':
-            write_to_csv(output_file, sorted_averages, throughput_values)
+            write_to_csv(output_file, sorted_cpu_averages, throughput_values, retrans_values)
         elif output_format == 'json':
-            write_to_json(output_file, sorted_averages, throughput_values)
+            write_to_json(output_file, sorted_cpu_averages, throughput_values, retrans_values)
         else:
             prev_ip_address = prev_test_name = ""
             print ("\nSummary of all testing: \n")
-            for (test_name, ip_address, type), averages in sorted_averages:
+            for (test_name, ip_address, type), cpu_averages in sorted_cpu_averages:
                if (test_name, ip_address) in throughput_values and throughput_values[(test_name, ip_address)]:
                    if test_name != prev_test_name or ip_address != prev_ip_address: # only print for new test
+                       numtests = len(throughput_values[(test_name, ip_address)])
                        avg_throughput = statistics.mean(throughput_values[(test_name, ip_address)])
                        max_throughput = max(throughput_values[(test_name, ip_address)])
                        stdev_throughput = statistics.stdev(throughput_values[(test_name, ip_address)])
-                       print(f"\nAve Tput for test {test_name} to Host: {ip_address}: {avg_throughput:.2f} Gbps, Max: {max_throughput:.2f} Gbps,  stdev: {stdev_throughput:.2f}")
+                       avg_retrans = int(statistics.mean(retrans_values[(test_name, ip_address)]))
+                       print(f"\nTest {test_name} to Host: {ip_address}   (num tests: {numtests})")
+                       print(f"       Throughput:   Mean: {avg_throughput:.2f} Gbps   Max: {max_throughput:.2f} Gbps   STDEV: {stdev_throughput:.2f}   retrans: {avg_retrans}")
                    if type == 'sender':
-                       for cpu, avg in averages.items():
+                       for cpu, avg in cpu_averages.items():
                             avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
-                            print(f"    Sender CPU {cpu}:   {avg_str}")
+                            print(f"     Sender CPU {cpu}:   {avg_str}")
                    else:
-                       for cpu, avg in averages.items():
+                       for cpu, avg in cpu_averages.items():
                             avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
-                            print(f"  Receiver CPU {cpu}:   {avg_str}")
+                            print(f"   Receiver CPU {cpu}:   {avg_str}")
                else:
                    print(f"\nNo throughput data available for test {test_name} to Host: {ip_address}")
                prev_test_name = test_name
                prev_ip_address = ip_address
     else:
-        print("ERROR: calculate_averages returned no results")
+        print("ERROR: calculate_cpu_averages returned no results")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process JSON files to calculate average CPU metrics.')
