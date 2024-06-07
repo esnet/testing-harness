@@ -12,6 +12,8 @@ import sys
 from collections import defaultdict
 import statistics
 
+verbose = 0
+
 def calculate_cpu_averages(cpu_loads):
     # note: this routine is use to calculate average for within a test, AND for set of tests
 
@@ -81,7 +83,8 @@ def find_files():
                 results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "src_cmd"})
 
         if file_cnt == 0:
-            print(f"No relevant files found in directory: {root}. Skipping...")
+            if verbose:
+                print(f"No relevant files found in directory: {root}. Skipping...")
             continue
 
     #print ("will look at these files: ", results)
@@ -187,6 +190,8 @@ def main(input_dir, output_format, output_file):
     rcv_cpu_loads = defaultdict(lambda: defaultdict(list))
     throughput_values = defaultdict(list)
     retrans_values = defaultdict(list)
+    max_throughput_per_test = defaultdict(dict)
+
 
     if not output_file:
         if output_format == 'csv':
@@ -214,7 +219,8 @@ def main(input_dir, output_format, output_file):
                 throughput_values[(test_name, ip_address)].append(throughput)
                 retrans_values[(test_name, ip_address)].append(retrans)
             else:
-                print (f"   Throughput not found in file {input_file}")
+                if verbose:
+                   print (f"   Throughput not found in file {input_file}")
         if type == 'mpstat_snd' or type == 'mpstat_rcv':
             with open(input_file, 'r') as f:
                 try:
@@ -260,7 +266,6 @@ def main(input_dir, output_format, output_file):
     if overall_cpu_averages:
         # Sort the dictionary by test_name and ip_address
         sorted_cpu_averages = sorted( overall_cpu_averages.items(), key=lambda x: (x[0][1], x[0][0]))
-        #sorted_cpu_averages = sorted( overall_cpu_averages.items(), key=lambda x: (x[0][0], x[0][1]))
         overall_cpu_averages = dict(sorted_cpu_averages)  # Convert back to dictionary if needed
 
         if output_format == 'csv':
@@ -276,7 +281,11 @@ def main(input_dir, output_format, output_file):
                        numtests = len(throughput_values[(test_name, ip_address)])
                        avg_throughput = statistics.mean(throughput_values[(test_name, ip_address)])
                        max_throughput = max(throughput_values[(test_name, ip_address)])
-                       stdev_throughput = statistics.stdev(throughput_values[(test_name, ip_address)])
+                       max_throughput_per_test[ip_address][test_name] = max_throughput # save for summary at the end
+                       if numtests > 1:
+                           stdev_throughput = statistics.stdev(throughput_values[(test_name, ip_address)])
+                       else:
+                           stdev_throughput = 0
                        avg_retrans = int(statistics.mean(retrans_values[(test_name, ip_address)]))
                        print(f"\nTest {test_name} to Host: {ip_address}   (num tests: {numtests})")
                        print(f"       Throughput:   Mean: {avg_throughput:.2f} Gbps   Max: {max_throughput:.2f} Gbps   STDEV: {stdev_throughput:.2f}   retrans: {avg_retrans}")
@@ -307,12 +316,29 @@ def main(input_dir, output_format, output_file):
                           else:
                                print ("     ** Throughput appears to be memory limited, CWND limited, or unknown **")
                else:
-                   print(f"\nNo throughput data available for test {test_name} to Host: {ip_address}")
+                   if verbose:
+                       print(f"\nNo throughput data available for test {test_name} to Host: {ip_address}")
+
                prev_test_name = test_name
                prev_ip_address = ip_address
 
     else:
         print("ERROR: calculate_cpu_averages returned no results")
+
+    # Sort max_throughput_per_test by maximum throughput for each IP
+    sorted_max_throughput = {}
+    for ip_address, tests in max_throughput_per_test.items():
+        sorted_tests = sorted(tests.items(), key=lambda x: x[1], reverse=True)
+        sorted_max_throughput[ip_address] = sorted_tests
+
+    # Print sorted max_throughput_per_test
+    print("\n\nResult Summary, sorted by Max Throughput:")
+    for ip_address, tests in sorted_max_throughput.items():
+        print(f"IP Address: {ip_address}")
+        for test_name, max_throughput in tests:
+            print(f"     Test Name: {test_name}, Max Throughput: {max_throughput:.2f} Gbps")
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process JSON files to calculate average CPU metrics.')
