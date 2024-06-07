@@ -259,7 +259,8 @@ def main(input_dir, output_format, output_file):
 
     if overall_cpu_averages:
         # Sort the dictionary by test_name and ip_address
-        sorted_cpu_averages = sorted( overall_cpu_averages.items(), key=lambda x: (x[0][0], x[0][1]))
+        sorted_cpu_averages = sorted( overall_cpu_averages.items(), key=lambda x: (x[0][1], x[0][0]))
+        #sorted_cpu_averages = sorted( overall_cpu_averages.items(), key=lambda x: (x[0][0], x[0][1]))
         overall_cpu_averages = dict(sorted_cpu_averages)  # Convert back to dictionary if needed
 
         if output_format == 'csv':
@@ -280,17 +281,36 @@ def main(input_dir, output_format, output_file):
                        print(f"\nTest {test_name} to Host: {ip_address}   (num tests: {numtests})")
                        print(f"       Throughput:   Mean: {avg_throughput:.2f} Gbps   Max: {max_throughput:.2f} Gbps   STDEV: {stdev_throughput:.2f}   retrans: {avg_retrans}")
                    if type == 'sender':
+                       total_snd = {}
                        for cpu, avg in cpu_averages.items():
+                            total_snd[cpu] = sum(value for key, value in avg.items() if key != 'idle')
                             avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
-                            print(f"     Sender CPU {cpu}:   {avg_str}")
+                            print(f"     Sender CPU {cpu}:   {avg_str}   Total:{total_snd[cpu]:3.1f}")
                    else:
+                       total_rcv = {}
                        for cpu, avg in cpu_averages.items():
+                            total_rcv[cpu] = sum(value for key, value in avg.items() if key != 'idle')
                             avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
-                            print(f"   Receiver CPU {cpu}:   {avg_str}")
+                            print(f"   Receiver CPU {cpu}:   {avg_str}   Total:{total_rcv[cpu]:3.1f}")
+                       #print ("total_snd: ", total_snd)
+                       #print ("total_rcv: ", total_rcv)
+                       if len(total_rcv) > 0:
+                          # XXX: current hack assume IRQ on CPU 4 and iperf3 on CPU 5. Generalize this some day!!
+                          if total_snd['4'] > 90:
+                               print ("    ** Throughput appears to be limited by IRQ on the Send Host **")
+                          elif total_snd['5'] > 90:
+                               print ("    ** Throughput appears to be limited by application CPU on the Send Host **")
+                          elif total_rcv['4'] > 90:
+                               print ("     ** Throughput appears to be limited by application CPU on the Receive Host **")
+                          elif total_rcv['5'] > 90:
+                               print ("     ** Throughput appears to be limited by application CPU on the Receive Host **")
+                          else:
+                               print ("     ** Throughput appears to be memory limited, CWND limited, or unknown **")
                else:
                    print(f"\nNo throughput data available for test {test_name} to Host: {ip_address}")
                prev_test_name = test_name
                prev_ip_address = ip_address
+
     else:
         print("ERROR: calculate_cpu_averages returned no results")
 
