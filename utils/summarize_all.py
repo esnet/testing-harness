@@ -251,7 +251,9 @@ def main(input_dir, output_format, output_file):
 
     if overall_averages:
         # Sort the dictionary by test_name and ip_address
-        sorted_averages = sorted( overall_averages.items(), key=lambda x: (x[0][0], x[0][1]))
+        #sorted_averages = sorted( overall_averages.items(), key=lambda x: (x[0][0], x[0][1]))
+        # Sort the dictionary by ip_address, then test_name
+        sorted_averages = sorted( overall_averages.items(), key=lambda x: (x[0][1], x[0][0]))
         overall_averages = dict(sorted_averages)  # Convert back to dictionary if needed
 
         if output_format == 'csv':

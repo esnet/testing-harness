@@ -19,22 +19,22 @@ echo "setting latency to $1"
 echo "setting loss to $2"
 
 # commented out for testing
-ssh "$NETEM_IP" /usr/local/bin/tc.sh clear
+ssh "$NETEM_IP" /usr/sbin/tc.sh clear
 sleep 1
 if [ $2 != "None" ] ; then
     if [ $3 != "None" ] ; then
-        echo "calling:  /usr/local/bin/tc.sh loss $1 $2 $3"
-        ssh "$NETEM_IP" /usr/local/bin/tc.sh loss $1 $2 $3 
+        echo "calling:  /usr/sbin/tc.sh loss $1 $2 $3"
+        ssh "$NETEM_IP" /usr/sbin/tc.sh loss $1 $2 $3 
     else
-        echo "calling:  /usr/local/bin/tc.sh loss $1 $2"
-        ssh "$NETEM_IP" /usr/local/bin/tc.sh loss $1 $2 
+        echo "calling:  /usr/sbin/tc.sh loss $1 $2"
+        ssh "$NETEM_IP" /usr/sbin/tc.sh loss $1 $2 
     fi
 else
-    echo "calling:  /usr/local/bin/tc.sh loss $1"
-    ssh "$NETEM_IP" /usr/local/bin/tc.sh loss $1 
+    echo "calling:  /usr/sbin/tc.sh loss $1"
+    ssh "$NETEM_IP" /usr/sbin/tc.sh loss $1 
 fi
 sleep 1
-ssh "$NETEM_IP" /usr/local/bin/tc.sh show
+ssh "$NETEM_IP" /usr/sbin/tc.sh show
 # to test that latency change worked
 ping -W 5 -c 2 "TEST_HOST"
 

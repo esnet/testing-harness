@@ -625,7 +625,7 @@ class Job:
                  log.info (f"Test {iter} to host {dst} completed sucessfully...")
               elif cnt > 4:
                  done = True
-                 log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED. Giving up ...")
+                 log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED for test {src_cmd}. Giving up ...")
               else:
                  try:  # get more info on the error
                      with open(ofname, "r") as file:
@@ -644,6 +644,7 @@ class Job:
                       mpstat_fname = os.path.join(self.outdir, f"mpstat-receiver:{ofname_suffix}.json")
                       dst_cmd = f"killall iperf3 && nohup {self.dst_cmd} && mpstat -P {self.mpstat} -o JSON 2 30 > {mpstat_fname}"
                       log.info(f"restarting iperf3 server: running dst_cmd {dst_cmd} on host: {dst}")
+                      time.sleep(5) # wait a bit
                       th = Thread(target=self._run_host_cmd,
                                 args=(dst, dst_cmd, ofname, (lambda: stop_threads)))
                       jthreads.append(th)
