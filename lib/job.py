@@ -46,6 +46,30 @@ def skip_comments(lines):
         if line:
             yield line
 
+def print_error_lines(file_path):
+    """
+    Read a file and print any line containing the string 'error'.
+
+    Args:
+    file_path (str): The path to the file.
+    """
+    try:
+        # Open the file
+        with open(file_path, 'r') as file:
+            # Read the contents of the file
+            file_contents = file.read()
+            # Split the contents into lines
+            lines = file_contents.split('\n')
+            # Iterate through each line
+            for line in lines:
+                # Check if the line contains the string 'error'
+                if 'error' in line.lower():  # Use lower() to make the search case-insensitive
+                    log.info(line)
+                    return 1  # only print the 1st error
+    except FileNotFoundError:
+        print(f"File '{file_path}' not found.")
+    return 0
+
 
 class Job:
     def __init__(self, name, cfg, outdir, hostlist, nic, archive):
@@ -544,7 +568,6 @@ class Job:
             sys.exit()
 
         # Start instrumentation (per iter)
-        # XXX: this breaks current version?? iperf server not connecting...
         if self.instrument:
              self._start_instr(dst, iter, ofname_suffix)
 
@@ -615,25 +638,14 @@ class Job:
               th.start()
               th.join()
               time.sleep(2)
-              try:
-                  log.debug("size of results file %s is %d" % (ofname, os.path.getsize(ofname)))
-              except:
-                  log.debug("results file %s is not found" % (ofname))
-              if os.path.getsize(ofname) > 1000 :
+              err = print_error_lines(ofname) # look for string 'error' in the results file
+              if not err:
                  done = True
-                 #log.info (f"Test {iter} attempt {cnt} to host {dst} completed sucessfully...")
                  log.info (f"Test {iter} to host {dst} completed sucessfully...")
               elif cnt > 4:
                  done = True
                  log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED for test {src_cmd}. Giving up ...")
               else:
-                 try:  # get more info on the error
-                     with open(ofname, "r") as file:
-                         file_contents = file.read()
-                         log.info(f"job output file contains: {file_contents}")
-                 except:
-                     log.error(f"output file '{ofname}' not found.")
-
                  log.info (f"Test {iter} attempt {cnt} to host {dst} FAILED, trying again...")
 
                  # if there is a dst_cmd, there is a good chance that is the process that failed, so run it again
