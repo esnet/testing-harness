@@ -404,7 +404,7 @@ class Job:
         log.debug(f"run_host_cmd: Running: \"{cmd}\" on \"{host}\", with output to file \"{ofname}\"")
         if host == None:
             log.info(f"Error: host = None! Exiting")
-            sys.exit() # does not kill threads
+            sys.exit() # note: does not kill threads
             
         rcmd = initcmd + cmd.split(" ")
         log.debug(rcmd)
@@ -661,6 +661,7 @@ class Job:
                                 args=(dst, dst_cmd, ofname, (lambda: stop_threads)))
                       jthreads.append(th)
                       th.start()
+                      time.sleep(20)  # wait a while when this happens. Often get the same error if again for some reason.
 
                  time.sleep(5)
                  cnt += 1
