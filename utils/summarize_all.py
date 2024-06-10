@@ -11,8 +11,34 @@ import csv
 import sys
 from collections import defaultdict
 import statistics
+import subprocess
 
-verbose = 0
+verbose = 0  # set to get warning about files with missing data
+max_tput_summary = 0  # set to get summary of max tput as well as average tput
+
+def load_iperf3_json(file_path):
+
+# NOTE: iperf3 JSON seems to be messed up, and the standard python JSON decoder
+#   can not parse it. As a workaround, use 'jq', and then throw out extra stuff
+#   XXX: need to report this bug
+
+    filename = os.path.basename(file_path)  # Extract filename from file_path
+    #print ("Getting tput data from file: ", filename)
+    try:
+        # Call jq to extract the desired data
+        result = subprocess.run(['jq', '.end.sum_sent', file_path], capture_output=True, text=True, check=True)
+        # Remove newlines and everything after "}"
+        result = result.stdout.replace('\n', '').split('}')[0] + '}'
+        #print ("jq result: ", result)
+        # Load the JSON output
+        data = json.loads(result)
+        #print ("got sum_sent data: ", data)
+        return data
+    except subprocess.CalledProcessError as e:
+        #print("Error calling jq:", e)
+        # probably not JSON
+        return None
+
 
 def calculate_cpu_averages(cpu_loads):
     # note: this routine is use to calculate average for within a test, AND for set of tests
@@ -91,18 +117,24 @@ def find_files():
     return results
 
 def extract_throughput(src_cmd_file):
-    with open(src_cmd_file, 'r') as f:
-        for line in f:
-            if 'sender' in line and 'CPU' not in line:
-                # XXX: what if Mbits/sec, not Gbits??
-                #throughput = re.search(r'(\d+\.\d+) Gbits/sec', line)
-                throughput = re.search(r'(\d+\.\d+)\s*Gbits/sec\s*(\d+)', line)
+    data = load_iperf3_json(src_cmd_file)
+    if data:
+         tput = float(data["bits_per_second"]) / 1000000000  # in Gbps
+         retrans = data["retransmits"] 
+         #print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
+         return tput, retrans
+    else: # not JSON, so assume normal iperf3 output format
+        with open(src_cmd_file, 'r') as f:
+            for line in f:
+                if 'sender' in line and 'CPU' not in line:
+                    # XXX: what if Mbits/sec, not Gbits??
+                    throughput = re.search(r'(\d+\.\d+)\s*Gbits/sec\s*(\d+)', line)
 
-                if throughput:
-                    tput = float(throughput.group(1)) # group(1) ensures a single number
-                    retrans = int(throughput.group(2))
-                    #print ("   extract_throughput returns: ", tput)
-                    return tput, retrans
+                    if throughput:
+                        tput = float(throughput.group(1)) # group(1) ensures a single number
+                        retrans = int(throughput.group(2))
+                        #print ("   extract_throughput returns: ", tput)
+                        return tput, retrans
     # If no throughput data is found, return None for both throughput and retrans
     return None, None
 
@@ -191,6 +223,7 @@ def main(input_dir, output_format, output_file):
     throughput_values = defaultdict(list)
     retrans_values = defaultdict(list)
     max_throughput_per_test = defaultdict(dict)
+    ave_throughput_per_test = defaultdict(dict)
 
 
     if not output_file:
@@ -282,6 +315,7 @@ def main(input_dir, output_format, output_file):
                        avg_throughput = statistics.mean(throughput_values[(test_name, ip_address)])
                        max_throughput = max(throughput_values[(test_name, ip_address)])
                        max_throughput_per_test[ip_address][test_name] = max_throughput # save for summary at the end
+                       ave_throughput_per_test[ip_address][test_name] = avg_throughput # save for summary at the end
                        if numtests > 1:
                            stdev_throughput = statistics.stdev(throughput_values[(test_name, ip_address)])
                        else:
@@ -332,12 +366,24 @@ def main(input_dir, output_format, output_file):
         sorted_max_throughput[ip_address] = sorted_tests
 
     # Print sorted max_throughput_per_test
-    print("\n\nResult Summary, sorted by Max Throughput:")
-    for ip_address, tests in sorted_max_throughput.items():
-        print(f"IP Address: {ip_address}")
-        for test_name, max_throughput in tests:
-            print(f"     Test Name: {test_name}, Max Throughput: {max_throughput:.2f} Gbps")
+    if max_tput_summary:
+        print("\n\nResult Summary, sorted by Max Throughput:")
+        for ip_address, tests in sorted_max_throughput.items():
+            print(f"IP Address: {ip_address}")
+            for test_name, max_throughput in tests:
+                print(f"     Test Name: {test_name}, Max Throughput: {max_throughput:.2f} Gbps")
 
+    sorted_ave_throughput = {}
+    for ip_address, tests in ave_throughput_per_test.items():
+        sorted_tests = sorted(tests.items(), key=lambda x: x[1], reverse=True)
+        sorted_ave_throughput[ip_address] = sorted_tests
+
+    # Print sorted ave_throughput_per_test
+    print("\n\nResult Summary, sorted by Average Throughput:")
+    for ip_address, tests in sorted_ave_throughput.items():
+        print(f"IP Address: {ip_address}")
+        for test_name, ave_throughput in tests:
+            print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.2f} Gbps")
 
 
 if __name__ == "__main__":
