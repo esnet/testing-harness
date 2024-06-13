@@ -2,6 +2,24 @@
 
 # summarize all mpstat and iperf3 output in a directory tree
 # run with -h to see options
+#
+# typical use:
+#   copy send and receiver output files from collect.py to a directory tree such as:
+#      test_name
+#          1stream
+#              send
+#              rcv
+#          8streams
+#              send
+#              rcv
+# then cd to test_name/1stream, and run this command from there.
+# Note that is should work fine to copy everything to just '1stream', but
+#    its easier to detect missing data if keep send and rcv separate.
+
+# TO DO:
+#   - add num_streams to csv and JSON output
+#   - test csv and JSON with num_streams > 1
+
 
 import os
 import re
