@@ -13,8 +13,12 @@ from collections import defaultdict
 import statistics
 import subprocess
 
+# Define global variables for default values
 verbose = 0  # set to get warning about files with missing data
 max_tput_summary = 0  # set to get summary of max tput as well as average tput
+DEFAULT_IRQ_CORE = 4
+DEFAULT_IPERF3_CORE = 5
+NUM_STREAMS = 1   # XXX: get this from the JSON results!!
 
 def load_iperf3_json(file_path):
 
@@ -118,6 +122,7 @@ def find_files():
 
 def extract_throughput(src_cmd_file):
     data = load_iperf3_json(src_cmd_file)
+    #print ("got sum_sent data: ", data)
     if data:
          tput = float(data["bits_per_second"]) / 1000000000  # in Gbps
          retrans = data["retransmits"] 
@@ -216,7 +221,12 @@ def write_to_json(output_file, cpu_averages, throughput_values, retrans_values):
 
 
 
-def main(input_dir, output_format, output_file):
+def main(args):
+    input_dir = args.input_dir
+    output_format = args.format
+    output_file = args.output_file
+    irq_core = args.irq_core
+    iperf3_core = args.iperf3_core
 
     snd_cpu_loads = defaultdict(lambda: defaultdict(list))
     rcv_cpu_loads = defaultdict(lambda: defaultdict(list))
@@ -326,29 +336,34 @@ def main(input_dir, output_format, output_file):
                    if type == 'sender':
                        total_snd = {}
                        for cpu, avg in cpu_averages.items():
+                            cpu = int(cpu)
                             total_snd[cpu] = sum(value for key, value in avg.items() if key != 'idle')
                             avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
                             print(f"     Sender CPU {cpu}:   {avg_str}   Total:{total_snd[cpu]:3.1f}")
                    else:
                        total_rcv = {}
                        for cpu, avg in cpu_averages.items():
+                            cpu = int(cpu)
                             total_rcv[cpu] = sum(value for key, value in avg.items() if key != 'idle')
                             avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
                             print(f"   Receiver CPU {cpu}:   {avg_str}   Total:{total_rcv[cpu]:3.1f}")
                        #print ("total_snd: ", total_snd)
                        #print ("total_rcv: ", total_rcv)
-                       if len(total_rcv) > 0:
-                          # XXX: current hack assume IRQ on CPU 4 and iperf3 on CPU 5. Generalize this some day!!
-                          if total_snd['4'] > 90:
-                               print ("    ** Throughput appears to be limited by IRQ on the Send Host **")
-                          elif total_snd['5'] > 90:
-                               print ("    ** Throughput appears to be limited by application CPU on the Send Host **")
-                          elif total_rcv['4'] > 90:
-                               print ("     ** Throughput appears to be limited by application CPU on the Receive Host **")
-                          elif total_rcv['5'] > 90:
-                               print ("     ** Throughput appears to be limited by application CPU on the Receive Host **")
-                          else:
-                               print ("     ** Throughput appears to be memory limited, CWND limited, or unknown **")
+                       if NUM_STREAMS == 1:
+                          if len(total_rcv) > 0:
+                             try:
+                                 if total_snd[irq_core] > 90:
+                                      print ("    ** Throughput appears to be limited by IRQ on the Send Host **")
+                                 elif total_snd[iperf3_core] > 90:
+                                      print ("    ** Throughput appears to be limited by application CPU on the Send Host **")
+                                 elif total_rcv[irq_core] > 90:
+                                      print ("     ** Throughput appears to be limited by application CPU on the Receive Host **")
+                                 elif total_rcv[iperf3_core] > 90:
+                                      print ("     ** Throughput appears to be limited by application CPU on the Receive Host **")
+                                 else:
+                                      print ("     ** Throughput appears to be memory limited, CWND limited, or unknown **")
+                             except:
+                                  print("Error getting core usage.")
                else:
                    if verbose:
                        print(f"\nNo throughput data available for test {test_name} to Host: {ip_address}")
@@ -392,8 +407,13 @@ if __name__ == "__main__":
     parser.add_argument('-f', '--format', choices=['human', 'json', 'csv'], default='human', help='Output format (default: human-readable)')
     parser.add_argument('-o', '--output_file', help='Output filename (default = mpstat-summary.{csv,json,txt)')
 
-    args = parser.parse_args()
+    parser.add_argument('--irq_core', type=int, default=DEFAULT_IRQ_CORE, help=f'Core number for IRQ (default: {DEFAULT_IRQ_CORE})')
+    parser.add_argument('--iperf3_core', type=int, default=DEFAULT_IPERF3_CORE, help=f'Core number for iperf3 (default: {DEFAULT_IPERF3_CORE})')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Increase output verbosity')
 
-    main(args.input_dir, args.format, args.output_file)
+    args = parser.parse_args()
+    verbose = args.verbose # set global
+
+    main(args)
 
 
