@@ -57,7 +57,7 @@ def load_iperf3_json(file_path):
         #print ("got sum_sent data: ", data)
         # also get num_streams
         result = subprocess.run(['jq', '.start.test_start.num_streams', file_path], capture_output=True, text=True, check=True)
-        num_streams = result.stdout.split('\n')[0]  # just grab first line due to iperf3 JSON bug
+        num_streams = int(result.stdout.split('\n')[0])  # just grab first line due to iperf3 JSON bug
         #print ("Got num_streams: ", num_streams)
         return data, num_streams
     except subprocess.CalledProcessError as e:
@@ -293,8 +293,8 @@ def main(args):
                 except:
                     parent_dir = os.path.basename(os.path.dirname(input_file))
                     filename_with_parent = os.path.join(parent_dir, fname)
-                    print("   Error loading file: ", filename_with_parent)
-                    sys.exit()
+                    print("   Error loading mpstat file: ", input_file)
+                    print("   JSON truncated? Continuing")
                     continue
 
                 averages, cpu_loads = process_cpu_data(data)
@@ -369,8 +369,8 @@ def main(args):
                             total_rcv[cpu] = sum(value for key, value in avg.items() if key != 'idle')
                             avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
                             print(f"   Receiver CPU {cpu}:   {avg_str}   Total:{total_rcv[cpu]:3.1f}")
-                       #print ("total_snd: ", total_snd)
-                       #print ("total_rcv: ", total_rcv)
+                       #print (f"num_streams: {num_streams}; total_snd: ", total_snd)
+                       #print (f"len of total_rcv: {len(total_rcv)}, total_rcv: ", total_rcv)
                        if num_streams == 1:
                           if len(total_rcv) > 0:
                              try:
@@ -385,7 +385,7 @@ def main(args):
                                  else:
                                       print ("     ** Throughput appears to be memory limited, CWND limited, or unknown **")
                              except:
-                                  print("Error getting core usage.")
+                                  print(f"Error getting core usage for cores {irq_core} or {iperf3_core}." )
                else:
                    if verbose:
                        print(f"\nNo throughput data available for test {test_name} to Host: {ip_address}")
