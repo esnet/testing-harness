@@ -87,7 +87,7 @@ def calculate_cpu_averages(cpu_loads):
         count += 1
 
     # Calculate CPU averages
-    averages = {key: round(value / count, 2) for key, value in sums.items() if value != 0}
+    averages = {key: round(value / count, 1) for key, value in sums.items() if value != 0}
     #print ("   calculate_cpu_averages returns: ", averages)
     return averages
 
@@ -180,9 +180,9 @@ def write_to_csv(output_file, cpu_data, throughput_values, retrans_values):
                 continue
             if len(ave_throughput) > 5:
                 print("Warning: have > 5 throughput values for this test. Is this intentional?")
-            ave_tput = round(statistics.mean(ave_throughput), 2) if ave_throughput else None
+            ave_tput = round(statistics.mean(ave_throughput), 1) if ave_throughput else None
             max_throughput = max(ave_throughput, default=None)
-            stdev_throughput = round(statistics.stdev(ave_throughput), 2) if len(ave_throughput) > 1 else None
+            stdev_throughput = round(statistics.stdev(ave_throughput), 1) if len(ave_throughput) > 1 else None
 
             # Initialize a row with common values
             row = {
@@ -215,9 +215,9 @@ def write_to_json(output_file, cpu_averages, throughput_values, retrans_values):
         (test_name, ip_address, type), averages = entry
         if len(throughput_values.get((test_name, ip_address), [])) == 0:
             continue
-        avg_throughput = round(statistics.mean(throughput_values.get((test_name, ip_address), [])), 2)
-        max_throughput = round(max(throughput_values.get((test_name, ip_address), []), default=None), 2)
-        stdev_throughput = round(statistics.stdev(throughput_values.get((test_name, ip_address), [])), 2) if len(throughput_values.get((test_name, ip_address), [])) > 1 else None
+        avg_throughput = round(statistics.mean(throughput_values.get((test_name, ip_address), [])), 1)
+        max_throughput = round(max(throughput_values.get((test_name, ip_address), []), default=None), 1)
+        stdev_throughput = round(statistics.stdev(throughput_values.get((test_name, ip_address), [])), 1) if len(throughput_values.get((test_name, ip_address), [])) > 1 else None
 
         cpu_averages_data = {
             "sender": {},
@@ -226,7 +226,7 @@ def write_to_json(output_file, cpu_averages, throughput_values, retrans_values):
 
         for cpu, avg in averages.items():
             cpu_type = "sender" if type == "mpstat_snd" else "receiver"
-            cpu_averages_data[cpu_type][f"CPU {cpu}"] = {key: round(value, 2) for key, value in avg.items()}
+            cpu_averages_data[cpu_type][f"CPU {cpu}"] = {key: round(value, 1) for key, value in avg.items()}
 
         output[f"{test_name} - {ip_address}"] = {
             "test_name": test_name,
@@ -354,20 +354,20 @@ def main(args):
                            stdev_throughput = 0
                        avg_retrans = int(statistics.mean(retrans_values[(test_name, ip_address)]))
                        print(f"\nTest {test_name} to Host: {ip_address}   (num tests: {numtests})")
-                       print(f"       Throughput:   Mean: {avg_throughput:.2f} Gbps   Max: {max_throughput:.2f} Gbps   STDEV: {stdev_throughput:.2f}   retrans: {avg_retrans}")
+                       print(f"       Throughput:   Mean: {avg_throughput:.1f} Gbps   Max: {max_throughput:.1f} Gbps   STDEV: {stdev_throughput:.1f}   retrans: {avg_retrans}")
                    if type == 'sender':
                        total_snd = {}
                        for cpu, avg in cpu_averages.items():
                             cpu = int(cpu)
                             total_snd[cpu] = sum(value for key, value in avg.items() if key != 'idle')
-                            avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
+                            avg_str = '   '.join(f"{key:4s}: {value:4.1f}" for key, value in avg.items())
                             print(f"     Sender CPU {cpu}:   {avg_str}   Total:{total_snd[cpu]:3.1f}")
                    else:
                        total_rcv = {}
                        for cpu, avg in cpu_averages.items():
                             cpu = int(cpu)
                             total_rcv[cpu] = sum(value for key, value in avg.items() if key != 'idle')
-                            avg_str = '   '.join(f"{key:4s}: {value:4.2f}" for key, value in avg.items())
+                            avg_str = '   '.join(f"{key:4s}: {value:4.1f}" for key, value in avg.items())
                             print(f"   Receiver CPU {cpu}:   {avg_str}   Total:{total_rcv[cpu]:3.1f}")
                        #print (f"num_streams: {num_streams}; total_snd: ", total_snd)
                        #print (f"len of total_rcv: {len(total_rcv)}, total_rcv: ", total_rcv)
@@ -408,7 +408,7 @@ def main(args):
         for ip_address, tests in sorted_max_throughput.items():
             print(f"IP Address: {ip_address}")
             for test_name, max_throughput in tests:
-                print(f"     Test Name: {test_name}, Max Throughput: {max_throughput:.2f} Gbps")
+                print(f"     Test Name: {test_name}, Max Throughput: {max_throughput:.1f} Gbps")
 
     sorted_ave_throughput = {}
     for ip_address, tests in ave_throughput_per_test.items():
@@ -420,7 +420,7 @@ def main(args):
     for ip_address, tests in sorted_ave_throughput.items():
         print(f"IP Address: {ip_address}")
         for test_name, ave_throughput in tests:
-            print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.2f} Gbps")
+            print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.1f} Gbps")
 
 
 if __name__ == "__main__":
