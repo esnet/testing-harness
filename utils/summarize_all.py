@@ -37,11 +37,15 @@ def load_iperf3_json(file_path):
         # Load the JSON output
         data = json.loads(result)
         #print ("got sum_sent data: ", data)
-        return data
+        # also get num_streams
+        result = subprocess.run(['jq', '.start.test_start.num_streams', file_path], capture_output=True, text=True, check=True)
+        num_streams = result.stdout.split('\n')[0]  # just grab first line due to iperf3 JSON bug
+        #print ("Got num_streams: ", num_streams)
+        return data, num_streams
     except subprocess.CalledProcessError as e:
         #print("Error calling jq:", e)
         # probably not JSON
-        return None
+        return None, None
 
 
 def calculate_cpu_averages(cpu_loads):
@@ -121,13 +125,13 @@ def find_files():
     return results
 
 def extract_throughput(src_cmd_file):
-    data = load_iperf3_json(src_cmd_file)
+    data, num_streams = load_iperf3_json(src_cmd_file)
     #print ("got sum_sent data: ", data)
     if data:
          tput = float(data["bits_per_second"]) / 1000000000  # in Gbps
          retrans = data["retransmits"] 
          #print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
-         return tput, retrans
+         return tput, retrans, num_streams
     else: # not JSON, so assume normal iperf3 output format
         with open(src_cmd_file, 'r') as f:
             for line in f:
@@ -139,9 +143,9 @@ def extract_throughput(src_cmd_file):
                         tput = float(throughput.group(1)) # group(1) ensures a single number
                         retrans = int(throughput.group(2))
                         #print ("   extract_throughput returns: ", tput)
-                        return tput, retrans
+                        return tput, retrans, 1   # XXX: need to grab num_streams too!
     # If no throughput data is found, return None for both throughput and retrans
-    return None, None
+    return None, None, None
 
 
 def write_to_csv(output_file, cpu_data, throughput_values, retrans_values):
@@ -257,7 +261,7 @@ def main(args):
         fname = os.path.basename(input_file)
         if type == 'src_cmd':
             #print ("Extracting throughput from file: ", input_file)
-            throughput, retrans = extract_throughput(input_file)
+            throughput, retrans, num_streams = extract_throughput(input_file)
             if throughput is not None:
                 throughput_values[(test_name, ip_address)].append(throughput)
                 retrans_values[(test_name, ip_address)].append(retrans)
@@ -349,7 +353,7 @@ def main(args):
                             print(f"   Receiver CPU {cpu}:   {avg_str}   Total:{total_rcv[cpu]:3.1f}")
                        #print ("total_snd: ", total_snd)
                        #print ("total_rcv: ", total_rcv)
-                       if NUM_STREAMS == 1:
+                       if num_streams == 1:
                           if len(total_rcv) > 0:
                              try:
                                  if total_snd[irq_core] > 90:
