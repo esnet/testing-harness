@@ -256,7 +256,7 @@ def main(args):
     retrans_values = defaultdict(list)
     max_throughput_per_test = defaultdict(dict)
     ave_throughput_per_test = defaultdict(dict)
-
+    stdev_throughput_per_test = defaultdict(dict)
 
     if not output_file:
         if output_format == 'csv':
@@ -349,9 +349,12 @@ def main(args):
                        max_throughput_per_test[ip_address][test_name] = max_throughput # save for summary at the end
                        ave_throughput_per_test[ip_address][test_name] = avg_throughput # save for summary at the end
                        if numtests > 1:
-                           stdev_throughput = statistics.stdev(throughput_values[(test_name, ip_address)])
+                           tput_array = throughput_values[(test_name, ip_address)]
+                           stdev_throughput = statistics.stdev(tput_array)
                        else:
+                           print ("Warning: only 1 test found.")
                            stdev_throughput = 0
+                       stdev_throughput_per_test[ip_address][test_name] = stdev_throughput # save for summary at the end
                        avg_retrans = int(statistics.mean(retrans_values[(test_name, ip_address)]))
                        print(f"\nTest {test_name} to Host: {ip_address}   (num tests: {numtests})")
                        print(f"       Throughput:   Mean: {avg_throughput:.1f} Gbps   Max: {max_throughput:.1f} Gbps   STDEV: {stdev_throughput:.1f}   retrans: {avg_retrans}")
@@ -420,7 +423,8 @@ def main(args):
     for ip_address, tests in sorted_ave_throughput.items():
         print(f"IP Address: {ip_address}")
         for test_name, ave_throughput in tests:
-            print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.1f} Gbps")
+            stdev = stdev_throughput_per_test[ip_address][test_name]
+            print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.1f} Gbps (stdev: {stdev:.1f})")
 
 
 if __name__ == "__main__":
