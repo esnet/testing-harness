@@ -53,7 +53,11 @@ def load_iperf3_json(file_path):
         result = result.stdout.replace('\n', '').split('}')[0] + '}'
         #print ("jq result: ", result)
         # Load the JSON output
-        data = json.loads(result)
+        try:
+            data = json.loads(result)
+        except:
+            print(f"Error parsing data in file: ", file_path)
+            return None, None
         #print ("got sum_sent data: ", data)
         # also get num_streams
         result = subprocess.run(['jq', '.start.test_start.num_streams', file_path], capture_output=True, text=True, check=True)
