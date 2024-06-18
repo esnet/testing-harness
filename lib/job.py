@@ -10,6 +10,7 @@ import sys
 import uuid
 import json
 import math
+import platform
 from pathlib import Path
 from datetime import datetime
 from subprocess import PIPE, STDOUT
@@ -309,6 +310,7 @@ class Job:
                 log.debug(f"got NIC speed: {nic_speed}")
                 md["MTU"] = mtu
                 md["NIC_speed"] = nic_speed
+                md["kernel"] = platform.release()
                 if self.pacing :
                     md["pacing"] = self.pacing
             return md
@@ -407,12 +409,11 @@ class Job:
             sys.exit() # note: does not kill threads
             
         rcmd = initcmd + cmd.split(" ")
-        log.debug(rcmd)
+        log.debug(f"running command: {rcmd}")
         try:
             proc = subprocess.Popen(rcmd, stdout=PIPE, stderr=STDOUT)
         except Exception as e:
             log.info(f"Error running {rcmd}: {e}")
-            sys.exit()
             return
         outs = None
         errs = None
@@ -436,6 +437,7 @@ class Job:
             f = open(ofname, 'wb')
             if not outs:
                 outs = proc.stdout.read()
+            #log.debug(f"run_host_cmd: writing stdout from command to file: {outs}")
             f.write(outs)
             f.close()
         except Exception as e:
@@ -578,22 +580,53 @@ class Job:
         if self.pre_src_cmd:
             log.info (f"running pre_src_cmd: {self.pre_src_cmd}" )
             ofname = os.path.join(self.outdir, f"pre-src-cmd:{ofname_suffix}")
+            try:
+               p = subprocess.run(self.pre_src_cmd, shell=True, stdout=subprocess.PIPE)
+            except subprocess.CalledProcessError as e:
+               log.error(f'ERROR running pre-src-cmd: {e.stderr}')
+            else:
+               cmd_output = p.stdout.decode('utf-8').rstrip()
+               log.info (f"saving pre_src_cmd output to file: {ofname}" )
+               # Write the output to the specified file
+               try:
+                   with open(ofname, 'w') as file:
+                        file.write(cmd_output)
+               except:
+                   log.error(f'ERROR writing to file {ofname}: ', err)
 
-            th = Thread(target=self._run_host_cmd,
-                                args=(self.hostname, self.pre_src_cmd, ofname, (lambda: stop_threads)))
-            jthreads.append(th)
-            th.start()
         if self.pre_dst_cmd:
             log.info (f"running pre_dst_cmd: {self.pre_dst_cmd}" )
             ofname = os.path.join(self.outdir, f"pre-dst-cmd:{ofname_suffix}")
-            th = Thread(target=self._run_host_cmd,
-                                args=(dst, self.pre_dst_cmd, ofname, (lambda: stop_threads)))
-            jthreads.append(th)
-            th.start()
+            host = dst
+            if host == None:
+                log.info(f"Error: host = None! Exiting")
+                sys.exit() 
+            # works, but not the recommended way to use subprocess.run...
+            initcmd = "ssh -t -o StrictHostKeyChecking=no"
+            rcmd = f'{initcmd} {host} "mkdir -p {self.outdir}; {self.pre_dst_cmd} > {ofname}"'
+
+            # not working? give ssh usage error. No idea why...
+            #initcmd = ["ssh", "-t", "-o", "StrictHostKeyChecking=no", host]
+            #pre_dst_cmd = f"mkdir -p {self.outdir}; {self.pre_dst_cmd} > {ofname}"
+            #rcmd = initcmd + pre_dst_cmd.split(" ")
+
+            log.debug(f"pre_dst_cmd: Running: {rcmd}")
+            try:
+               p = subprocess.run(rcmd, shell=True, stdout=subprocess.PIPE)
+            except subprocess.CalledProcessError as e:
+               log.error(f'ERROR running pre-dst-cmd: {e.stderr}')
+            else:
+               cmd_output = p.stdout.decode('utf-8').rstrip()
+               log.info (f"saving pre_dst_cmd output to file: {ofname}" )
+               # Write the output to the specified file
+               try:
+                   with open(ofname, 'w') as file:
+                        file.write(cmd_output)
+               except:
+                   log.error(f'ERROR writing to file {ofname}: ', err)
 
         # wait for a bit
-        time.sleep(2)
-
+        time.sleep(1)
 
         # start target (dst) cmd
         if self.dst_cmd:
