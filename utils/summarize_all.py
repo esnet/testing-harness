@@ -148,11 +148,11 @@ def find_files():
 
 def extract_throughput(src_cmd_file):
     data, num_streams = load_iperf3_json(src_cmd_file)
-    print ("got sum_sent data: ", data)
+    #print ("got sum_sent data: ", data)
     if data:
          tput = float(data["bits_per_second"]) / 1000000000  # in Gbps
          retrans = data["retransmits"] 
-         print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
+         #print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
          return tput, retrans, num_streams
     else: # not JSON, so assume normal iperf3 output format
         with open(src_cmd_file, 'r') as f:
@@ -311,8 +311,11 @@ def main(args):
                         rcv_cpu_loads[(test_name, ip_address)][cpu].extend(loads)
 
     print(f"\n Got iperf3 data from {len(throughput_values)} files")
-    print(f"\n Got mpstat data from {len(snd_cpu_loads)} sender files and {len(rcv_cpu_loads)} receiver files")
+    print (throughput_values)
+    print(f" Got mpstat data from {len(snd_cpu_loads)} sender files and {len(rcv_cpu_loads)} receiver files")
     overall_cpu_averages = {}
+    print ("\nComputing Throughput Averages...")
+
     print ("\nComputing CPU Averages...")
     for (test_name, ip_address), cpu_data in snd_cpu_loads.items():
         cpu_averages = {}
@@ -327,23 +330,13 @@ def main(args):
 
     for (test_name, ip_address), cpu_data in rcv_cpu_loads.items():
         cpu_averages = {}
+        prev_ip_address = prev_test_name = ""
 
         for cpu, loads in cpu_data.items():
             if loads:
                 cpu_averages[cpu] = calculate_cpu_averages(loads)
         overall_cpu_averages[(test_name, ip_address, 'receiver')] = cpu_averages
 
-    if overall_cpu_averages:
-        # Sort the dictionary by test_name and ip_address
-        sorted_cpu_averages = sorted( overall_cpu_averages.items(), key=lambda x: (x[0][1], x[0][0]))
-        overall_cpu_averages = dict(sorted_cpu_averages)  # Convert back to dictionary if needed
-
-        if output_format == 'csv':
-            write_to_csv(output_file, sorted_cpu_averages, throughput_values, retrans_values)
-        elif output_format == 'json':
-            write_to_json(output_file, sorted_cpu_averages, throughput_values, retrans_values)
-        else:
-            prev_ip_address = prev_test_name = ""
             print ("\nSummary of all testing: \n")
             for (test_name, ip_address, type), cpu_averages in sorted_cpu_averages:
                if (test_name, ip_address) in throughput_values and throughput_values[(test_name, ip_address)]:

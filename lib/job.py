@@ -577,7 +577,7 @@ class Job:
         jthreads = list()
 
         # handle pre-cmd invocation
-        if self.pre_src_cmd:
+        if self.pre_src_cmd and iter == 1:
             log.info (f"running pre_src_cmd: {self.pre_src_cmd}" )
             ofname = os.path.join(self.outdir, f"pre-src-cmd:{ofname_suffix}")
             try:
@@ -594,7 +594,7 @@ class Job:
                except:
                    log.error(f'ERROR writing to file {ofname}: ', err)
 
-        if self.pre_dst_cmd:
+        if self.pre_dst_cmd and iter == 1:
             log.info (f"running pre_dst_cmd: {self.pre_dst_cmd}" )
             ofname = os.path.join(self.outdir, f"pre-dst-cmd:{ofname_suffix}")
             host = dst
