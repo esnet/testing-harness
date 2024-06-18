@@ -151,7 +151,8 @@ def extract_throughput(src_cmd_file):
     if data:
          tput = float(data["bits_per_second"]) / 1000000000  # in Gbps
          retrans = data["retransmits"] 
-         print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
+         if verbose:
+             print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
          return tput, retrans, num_streams
     else: # not JSON, so assume normal iperf3 output format
         with open(src_cmd_file, 'r') as f:
