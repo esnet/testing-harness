@@ -148,11 +148,11 @@ def find_files():
 
 def extract_throughput(src_cmd_file):
     data, num_streams = load_iperf3_json(src_cmd_file)
-    #print ("got sum_sent data: ", data)
+    print ("got sum_sent data: ", data)
     if data:
          tput = float(data["bits_per_second"]) / 1000000000  # in Gbps
          retrans = data["retransmits"] 
-         #print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
+         print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
          return tput, retrans, num_streams
     else: # not JSON, so assume normal iperf3 output format
         with open(src_cmd_file, 'r') as f:
@@ -310,6 +310,7 @@ def main(args):
                     else:
                         rcv_cpu_loads[(test_name, ip_address)][cpu].extend(loads)
 
+    print(f"\n Got iperf3 data from {len(throughput_values)} files")
     print(f"\n Got mpstat data from {len(snd_cpu_loads)} sender files and {len(rcv_cpu_loads)} receiver files")
     overall_cpu_averages = {}
     print ("\nComputing CPU Averages...")
