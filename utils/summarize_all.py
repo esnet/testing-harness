@@ -19,6 +19,9 @@
 # TO DO:
 #   - add num_streams to csv and JSON output
 #   - test csv and JSON with num_streams > 1
+#   - refactor to make the code maintainable. This grew organically, and 
+#        is really a mess
+#   - make it work without mpstat data
 
 
 import os
@@ -395,7 +398,9 @@ def main(args):
                prev_ip_address = ip_address
 
     else:
-        print("ERROR: calculate_cpu_averages returned no results")
+        print("   ERROR: no CPU data (mpstat files) found. Current version of this program requires them. Exiting..")
+        print("   Re-run collect.py with mpstat specified in the ini file")
+        sys.exit()
 
     # Sort max_throughput_per_test by maximum throughput for each IP
     sorted_max_throughput = {}
