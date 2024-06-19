@@ -261,6 +261,7 @@ def main(args):
     max_throughput_per_test = defaultdict(dict)
     ave_throughput_per_test = defaultdict(dict)
     stdev_throughput_per_test = defaultdict(dict)
+    ave_retrans_per_test = defaultdict(dict)
 
     if not output_file:
         if output_format == 'csv':
@@ -361,8 +362,9 @@ def main(args):
                            stdev_throughput = 0
                        stdev_throughput_per_test[ip_address][test_name] = stdev_throughput # save for summary at the end
                        avg_retrans = int(statistics.mean(retrans_values[(test_name, ip_address)]))
+                       ave_retrans_per_test[ip_address][test_name] = avg_retrans # save for summary at the end
                        print(f"\nTest {test_name} to Host: {ip_address}   (num tests: {numtests})")
-                       print(f"       Throughput:   Mean: {avg_throughput:.1f} Gbps   Max: {max_throughput:.1f} Gbps   STDEV: {stdev_throughput:.1f}   retrans: {avg_retrans}")
+                       print(f"       Throughput:   Mean: {avg_throughput:.1f} Gbps   Max: {max_throughput:.1f} Gbps   STDEV: {stdev_throughput:.1f}   Retr: {avg_retrans}")
                    if type == 'sender':
                        total_snd = {}
                        for cpu, avg in cpu_averages.items():
@@ -431,7 +433,8 @@ def main(args):
         print(f"IP Address: {ip_address}")
         for test_name, ave_throughput in tests:
             stdev = stdev_throughput_per_test[ip_address][test_name]
-            print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.1f} Gbps (stdev: {stdev:.1f})")
+            rtrans = int(ave_retrans_per_test[ip_address][test_name])
+            print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.1f} Gbps (stdev: {stdev:.1f}),  Retr: {rtrans}")
 
 
 if __name__ == "__main__":
