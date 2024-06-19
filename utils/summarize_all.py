@@ -435,6 +435,8 @@ def main(args):
             stdev = stdev_throughput_per_test[ip_address][test_name]
             rtrans = int(ave_retrans_per_test[ip_address][test_name])
             print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.1f} Gbps (stdev: {stdev:.1f}),  Retr: {rtrans}")
+            if verbose and stdev > 20:
+                print("  ** high stdev! ** ", throughput_values[(test_name, ip_address)])
 
 
 if __name__ == "__main__":
