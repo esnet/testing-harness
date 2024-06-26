@@ -112,26 +112,27 @@ def process_cpu_data(data):
 
 def find_files():
     cwd = os.getcwd()
-    mpstat_snd_pattern = re.compile(r"mpstat-sender:(\d+\.\d+\.\d+\.\d+):.*\.json")
-    mpstat_rcv_pattern = re.compile(r"mpstat-receiver:(\d+\.\d+\.\d+\.\d+):.*\.json")
-    src_cmd_pattern = re.compile(r"src-cmd:(\d+\.\d+\.\d+\.\d+):.*")
+    mpstat_snd_pattern = re.compile(r"mpstat-sender:([\w\.\-]+):.*\.json")
+    mpstat_rcv_pattern = re.compile(r"mpstat-receiver:([\w\.\-]+):.*\.json")
+    src_cmd_pattern = re.compile(r"src-cmd:([\w\.\-]+):.*")
 
     results = []
 
     for root, dirs, files in os.walk(cwd):
         file_cnt = 0
         for file in files:
+            #print("Checking file: ", file)
             mpstat_snd_match = mpstat_snd_pattern.match(file)
             mpstat_rcv_match = mpstat_rcv_pattern.match(file)
             src_cmd_match = src_cmd_pattern.match(file)
             test_name = os.path.basename(root)
             if mpstat_snd_match:
                 file_cnt += 1
-                ip_address = mpstat_snd_match.group(1) 
+                ip_address = mpstat_snd_match.group(1)
                 results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "mpstat_snd"})
             if mpstat_rcv_match:
                 file_cnt += 1
-                ip_address = mpstat_rcv_match.group(1) 
+                ip_address = mpstat_rcv_match.group(1)
                 results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "mpstat_rcv"})
             if src_cmd_match:
                 file_cnt += 1
@@ -140,7 +141,7 @@ def find_files():
 
         if file_cnt == 0:
             if verbose:
-                print(f"No relevant files found in directory: {root}. Skipping...")
+                print(f"No iperf3 or mpstat files found in directory: {root}. Skipping...")
             continue
 
     #print ("will look at these files: ", results)
