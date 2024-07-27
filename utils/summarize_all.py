@@ -62,7 +62,7 @@ def load_iperf3_json(file_path):
         # also get num_streams
         result = subprocess.run(['jq', '.start.test_start.num_streams', file_path], capture_output=True, text=True, check=True)
         num_streams = int(result.stdout.split('\n')[0])  # just grab first line due to iperf3 JSON bug
-        #print ("Got num_streams: ", num_streams)
+        #print (f"{file_path}: Got num_streams: ", num_streams)
         return data, num_streams
     except subprocess.CalledProcessError as e:
         #print("Error calling jq:", e)
@@ -258,6 +258,7 @@ def main(args):
     rcv_cpu_loads = defaultdict(lambda: defaultdict(list))
     throughput_values = defaultdict(list)
     retrans_values = defaultdict(list)
+    min_throughput_per_test = defaultdict(dict)
     max_throughput_per_test = defaultdict(dict)
     ave_throughput_per_test = defaultdict(dict)
     stdev_throughput_per_test = defaultdict(dict)
@@ -285,6 +286,7 @@ def main(args):
         if type == 'src_cmd':
             #print ("Extracting throughput from file: ", input_file)
             throughput, retrans, num_streams = extract_throughput(input_file)
+            #print (f"test name: {test_name}, IP: {ip_address}, tput: {throughput}")
             if throughput is not None:
                 throughput_values[(test_name, ip_address)].append(throughput)
                 retrans_values[(test_name, ip_address)].append(retrans)
@@ -345,13 +347,17 @@ def main(args):
             write_to_json(output_file, sorted_cpu_averages, throughput_values, retrans_values)
         else:
             prev_ip_address = prev_test_name = ""
+             
             print ("\nSummary of all testing: \n")
             for (test_name, ip_address, type), cpu_averages in sorted_cpu_averages:
-               if (test_name, ip_address) in throughput_values and throughput_values[(test_name, ip_address)]:
+               #if (test_name, ip_address) in throughput_values and throughput_values[(test_name, ip_address)]:
+               if (test_name, ip_address) in throughput_values:
                    if test_name != prev_test_name or ip_address != prev_ip_address: # only print for new test
                        numtests = len(throughput_values[(test_name, ip_address)])
                        avg_throughput = statistics.mean(throughput_values[(test_name, ip_address)])
+                       min_throughput = min(throughput_values[(test_name, ip_address)])
                        max_throughput = max(throughput_values[(test_name, ip_address)])
+                       min_throughput_per_test[ip_address][test_name] = min_throughput # save for summary at the end
                        max_throughput_per_test[ip_address][test_name] = max_throughput # save for summary at the end
                        ave_throughput_per_test[ip_address][test_name] = avg_throughput # save for summary at the end
                        if numtests > 1:
@@ -364,7 +370,7 @@ def main(args):
                        avg_retrans = int(statistics.mean(retrans_values[(test_name, ip_address)]))
                        ave_retrans_per_test[ip_address][test_name] = avg_retrans # save for summary at the end
                        print(f"\nTest {test_name} to Host: {ip_address}   (num tests: {numtests})")
-                       print(f"       Throughput:   Mean: {avg_throughput:.1f} Gbps   Max: {max_throughput:.1f} Gbps   STDEV: {stdev_throughput:.1f}   Retr: {avg_retrans}")
+                       print(f"       Throughput:   Mean: {avg_throughput:.1f} Gbps   Min: {min_throughput:.1f} Gbps  Max: {max_throughput:.1f} Gbps   STDEV: {stdev_throughput:.1f}   Retr: {avg_retrans}")
                    if type == 'sender':
                        total_snd = {}
                        for cpu, avg in cpu_averages.items():
@@ -433,9 +439,11 @@ def main(args):
         print(f"IP Address: {ip_address}")
         for test_name, ave_throughput in tests:
             stdev = stdev_throughput_per_test[ip_address][test_name]
+            min_throughput = min_throughput_per_test[ip_address][test_name]
+            max_throughput = max_throughput_per_test[ip_address][test_name]
             rtrans = int(ave_retrans_per_test[ip_address][test_name])
-            print(f"     Test Name: {test_name}, Ave Throughput: {ave_throughput:.1f} Gbps (stdev: {stdev:.1f}),  Retr: {rtrans}")
-            if verbose and stdev > 20:
+            print(f"    Test Name: {test_name}, Ave Throughput: {ave_throughput:.1f} Gbps (std: {stdev:.1f}, min: {min_throughput:.1f}, max: {max_throughput:.1f}),  Retr: {rtrans}")
+            if verbose and stdev > 10:
                 print("  ** high stdev! ** ", throughput_values[(test_name, ip_address)])
 
 
