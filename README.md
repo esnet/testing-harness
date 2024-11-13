@@ -1,5 +1,12 @@
 # ESnet Network Test Harness
 
+To install dependencies, run:
+
+```
+python3 setup.py install
+```
+
+
 This directory contains a customized version of ESnet's Network Test Harness for testing BBRv3.
 
 Eventually this branch should probably be merged into the master branch.
