@@ -17,8 +17,8 @@
 #    its easier to detect missing data if keep send and rcv separate.
 
 # TO DO:
-#   - add num_streams to csv and JSON output
 #   - test csv and JSON with num_streams > 1
+#   - make it work without mpstat data too
 
 
 import os
@@ -36,36 +36,39 @@ verbose = 0  # set to get warning about files with missing data
 max_tput_summary = 0  # set to get summary of max tput as well as average tput
 DEFAULT_IRQ_CORE = 4
 DEFAULT_IPERF3_CORE = 5
-NUM_STREAMS = 1   # XXX: get this from the JSON results!!
 
 def load_iperf3_json(file_path):
 
 # NOTE: iperf3 JSON seems to be messed up, and the standard python JSON decoder
-#   can not parse it. As a workaround, use 'jq', and then throw out extra stuff
-#   XXX: need to report this bug
+#   can not parse it. Even worse in pschedulers iperf3 output.
+#   As a workaround, the fix-pscheduler-json.sh script cleans it up
+# XXX: rewrite all this in python do dont need subprocess.run!
 
     filename = os.path.basename(file_path)  # Extract filename from file_path
+    new_filepath = file_path+".fixed.json"
     #print ("Getting tput data from file: ", filename)
     try:
-        # Call jq to extract the desired data
-        result = subprocess.run(['jq', '.end.sum_sent', file_path], capture_output=True, text=True, check=True)
-        # Remove newlines and everything after "}"
-        result = result.stdout.replace('\n', '').split('}')[0] + '}'
-        #print ("jq result: ", result)
+        if not os.path.exists(new_filepath):
+            # Call cleanup script
+            result = subprocess.run(['fix-pscheduler-json.sh', file_path], capture_output=True, text=True, check=True)
+        # use jq to get results 
+        #print ("   using jq to extract .end.sum_sent data from file: ", new_filepath)
+        #result = subprocess.run(['jq', '.end.sum_sent', new_filepath], capture_output=True, text=True, check=True)
+        result = subprocess.run(['jq', '.end', new_filepath], capture_output=True, text=True, check=True)
         # Load the JSON output
         try:
-            data = json.loads(result)
+            data = json.loads(result.stdout)
         except:
             print(f"Error parsing data in file: ", file_path)
             return None, None
         #print ("got sum_sent data: ", data)
         # also get num_streams
-        result = subprocess.run(['jq', '.start.test_start.num_streams', file_path], capture_output=True, text=True, check=True)
+        result = subprocess.run(['jq', '.start.test_start.num_streams', new_filepath], capture_output=True, text=True, check=True)
         num_streams = int(result.stdout.split('\n')[0])  # just grab first line due to iperf3 JSON bug
         #print (f"{file_path}: Got num_streams: ", num_streams)
         return data, num_streams
     except subprocess.CalledProcessError as e:
-        #print("Error calling jq:", e)
+        #print("Error calling fixup script:", e)
         # probably not JSON
         return None, None
 
@@ -150,11 +153,13 @@ def find_files():
 def extract_throughput(src_cmd_file):
     data, num_streams = load_iperf3_json(src_cmd_file)
     if data:
-         tput = float(data["bits_per_second"]) / 1000000000  # in Gbps
-         retrans = data["retransmits"] 
+         tput = float(data["sum_sent"]["bits_per_second"]) / 1000000000  # in Gbps
+         retrans = data["sum_sent"]["retransmits"] 
+         send_cpu = float(data["cpu_utilization_percent"]["host_total"])
+         recv_cpu = float(data["cpu_utilization_percent"]["remote_total"])
          if verbose:
-             print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}")
-         return tput, retrans, num_streams
+             print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}, send CPU={send_cpu}, recv CPU={recv_cpu}")
+         return tput, retrans, num_streams, send_cpu, recv_cpu
     else: # not JSON, so assume normal iperf3 output format
         with open(src_cmd_file, 'r') as f:
             for line in f:
@@ -166,9 +171,9 @@ def extract_throughput(src_cmd_file):
                         tput = float(throughput.group(1)) # group(1) ensures a single number
                         retrans = int(throughput.group(2))
                         #print ("   extract_throughput returns: ", tput)
-                        return tput, retrans, 1   # XXX: need to grab num_streams too!
+                        return tput, retrans, 1, None, None   # XXX: need to grab num_streams and CPU too!
     # If no throughput data is found, return None for both throughput and retrans
-    return None, None, None
+    return None, None, None, None, None
 
 
 def write_to_csv(output_file, cpu_data, throughput_values, retrans_values):
@@ -286,7 +291,7 @@ def main(args):
         fname = os.path.basename(input_file)
         if type == 'src_cmd':
             #print ("Extracting throughput from file: ", input_file)
-            throughput, retrans, num_streams = extract_throughput(input_file)
+            throughput, retrans, num_streams, send_cpu, recv_cpu = extract_throughput(input_file)
             #print (f"test name: {test_name}, IP: {ip_address}, tput: {throughput}")
             if throughput is not None:
                 throughput_values[(test_name, ip_address)].append(throughput)
