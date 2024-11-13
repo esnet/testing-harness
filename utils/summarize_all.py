@@ -147,6 +147,8 @@ def write_human_readable(throughput_values, retrans_values, snd_cpu_values, rcv_
         avg_retrans = int(statistics.mean(retrans_values[(test_name, ip_address)])) if (test_name, ip_address) in retrans_values else 0
         avg_snd_cpu = int(statistics.mean(snd_cpu_values[(test_name, ip_address)])) if (test_name, ip_address) in snd_cpu_values else 0
         avg_rcv_cpu = int(statistics.mean(rcv_cpu_values[(test_name, ip_address)])) if (test_name, ip_address) in snd_cpu_values else 0
+        # only include count if value > 0
+        ntests = sum(1 for x in tputs if x > 0)
         
         # Store the data in a nested dictionary sorted by IP
         if ip_address not in sorted_results:
@@ -169,7 +171,7 @@ def write_human_readable(throughput_values, retrans_values, snd_cpu_values, rcv_
 
     # Print the sorted results
     for ip_address, tests in sorted_results.items():
-        print(f"Host: {ip_address}")
+        print(f"Host: {ip_address}  (average result for {ntests} tests)")
         for test in tests:
             print(f"    Test Name: {test['test_name']}, Ave Throughput: {test['avg_tput']} Gbps (std: {test['stdev_tput']}, min: {test['min_tput']}, max: {test['max_tput']}),  Retr: {test['avg_retrans']}, snd cpu: {test['avg_snd_cpu']}%, rcv cpu: {test['avg_rcv_cpu']}%")
 
