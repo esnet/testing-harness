@@ -1,6 +1,9 @@
 #!/bin/bash
 
 # JSON output from pscheduler is a mess, and not parsable. This script will clean it up.
+#
+# note: summarize_all.py script now does this in python 
+#
 
 # Check if input file is provided
 if [ -z "$1" ]; then

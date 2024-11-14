@@ -22,8 +22,61 @@ verbose = 0
 max_tput_summary = 0
 
 def load_iperf3_json(file_path):
-    filename = os.path.basename(file_path)
+
+# NOTE: current JSON output by pscheduler is a mess, and not even valid JSON!
+# to clean it up, we do the following:
+#    replace all \n with a newline
+#    replayce all \" with "
+#    delete the first 3 lines (which are missing a trailing " )
+#    delete everything after the string 'Participant'
+#
+
+    with open(file_path, 'r') as f:
+        content = f.read()
+
+    # Replace escape sequences
+    content = content.replace('\\n', '\n').replace('\\"', '"')
+
+    # Split the content into lines
+    lines = content.splitlines()
+
+    # Remove the first 3 lines
+    lines = lines[3:]
+
+    # Remove lines from 'Participant' to the end
+    cleaned_lines = []
+    participant_found = False
+    for line in lines:
+        if 'Participant' in line:
+            participant_found = True
+        if not participant_found:
+            cleaned_lines.append(line)
+
+    # Join cleaned lines and save to output file
+    cleaned_content = '\n'.join(cleaned_lines)
+    # NOTE: this file is not used, but might be useful for debugging
     new_filepath = file_path + ".fixed.json"
+    with open(new_filepath, 'w') as f:
+        f.write(cleaned_content)
+
+    # Extract the data from the JSON
+    try:
+        data = json.loads(cleaned_content)
+        # get entire 'end' JSON object from iperf3 output
+        end_data = data.get('end')
+        num_streams = data["start"]["test_start"]["num_streams"]
+        send_cpu = float(end_data["cpu_utilization_percent"]["host_total"])
+        recv_cpu = float(end_data["cpu_utilization_percent"]["remote_total"])
+        #print(f"got iperf3 data: num_streams = {num_streams} ")
+    except:
+        print("Warning: Required JSON fields not found in file: ", file_path)
+        return None, None, None, None
+
+    return end_data, num_streams, send_cpu, recv_cpu
+
+# alternate version of code that uses fix-pscheduler-json.sh below
+# leaving this code here for now, but should remove eventually. 
+    filename = os.path.basename(file_path)
     try:
         if not os.path.exists(new_filepath):
             result = subprocess.run(['fix-pscheduler-json.sh', file_path], capture_output=True, text=True, check=True)
