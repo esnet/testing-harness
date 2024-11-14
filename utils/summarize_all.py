@@ -52,13 +52,8 @@ def load_iperf3_json(file_path):
         if not participant_found:
             cleaned_lines.append(line)
 
-    # Join cleaned lines and save to output file
+    # Join cleaned lines 
     cleaned_content = '\n'.join(cleaned_lines)
-    # NOTE: this file is not used, but might be useful for debugging
-    new_filepath = file_path + ".fixed.json"
-    with open(new_filepath, 'w') as f:
-        f.write(cleaned_content)
-
     # Extract the data from the JSON
     try:
         data = json.loads(cleaned_content)
@@ -71,6 +66,11 @@ def load_iperf3_json(file_path):
     except:
         print("Warning: Required JSON fields not found in file: ", file_path)
         return None, None, None, None
+
+    # NOTE: this file is not used, but might be useful for debugging
+    new_filepath = file_path + ".fixed.json"
+    with open(new_filepath, 'w') as f:
+        f.write(cleaned_content)
 
     return end_data, num_streams, send_cpu, recv_cpu
 
@@ -273,7 +273,7 @@ def write_to_json(output_file, throughput_values, cpu_averages):
     print(f"JSON output saved to {output_file}")
 
 def main(args):
-    use_iperf3_cpu = args.use_iperf3_cpu
+    use_mpstat = args.use_mpstat
     throughput_values = defaultdict(list)
     retrans_values = defaultdict(list)
     snd_cpu_loads = defaultdict(list)
@@ -297,7 +297,8 @@ def main(args):
             else:
                 if verbose:
                     print(f"Throughput not found in file {input_file}")
-        elif not use_iperf3_cpu and (type == 'mpstat_snd' or type == 'mpstat_rcv'):
+
+        if use_mpstat and (type == 'mpstat_snd' or type == 'mpstat_rcv'):
             with open(input_file, 'r') as f:
                 try:
                     data = json.load(f)
@@ -326,7 +327,7 @@ if __name__ == "__main__":
     parser.add_argument('-f', '--format', choices=['human', 'json', 'csv'], default='human', help='Output format (default: human-readable)')
     parser.add_argument('-o', '--output_file', help='Output filename (default = mpstat-summary.{csv,json,txt)')
     parser.add_argument('-v', '--verbose', action='store_true', help='Increase output verbosity')
-    parser.add_argument('--use_iperf3_cpu', action='store_true', help='Use CPU data from iperf3 JSON instead of mpstat files')
+    parser.add_argument('--use_mpstat', action='store_true', help='Use CPU data from mpstat files (not done)')
     
     args = parser.parse_args()
     verbose = args.verbose
