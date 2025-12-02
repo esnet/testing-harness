@@ -175,6 +175,7 @@ for root, dirs, files in os.walk(directory_path):
                tool = "iperf3"
 
             # get nstreams and cong_alg from src_cmd, if set
+            nstreams = 1
             pattern = r'--parallel ([^\s]+)'
             match = re.search(pattern, src_cmd)
             if match:
@@ -195,6 +196,7 @@ for root, dirs, files in os.walk(directory_path):
             print (f"   From jobmeta.json; tool: {tool}, nstreams: {nstreams}, Cong Alg: {cong}, pacing: %.2f, MSS: {mss_value}" % fq_rate)
 
     json_file_cnt = 0
+    iperf2 = 0  ## probably breaks iperf2..
     for filename in files:
 
         file_path = os.path.join(root, filename)

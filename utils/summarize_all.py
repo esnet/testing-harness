@@ -20,59 +20,89 @@ import subprocess
 # Define global variables for default values
 verbose = 0
 max_tput_summary = 0
+# need to do extra JSON cleanup if from pscheduler. Set to 1 if needed.
+from_pscheduler=0
 
 def load_iperf3_json(file_path):
-
-# NOTE: current JSON output by pscheduler is a mess, and not even valid JSON!
-# to clean it up, we do the following:
-#    replace all \n with a newline
-#    replayce all \" with "
-#    delete the first 3 lines (which are missing a trailing " )
-#    delete everything after the string 'Participant'
-#
 
     with open(file_path, 'r') as f:
         content = f.read()
 
-    # Replace escape sequences
-    content = content.replace('\\n', '\n').replace('\\"', '"')
+    if from_pscheduler:
+      # NOTE: current JSON output by pscheduler is a mess, and not even valid JSON!
+      # to clean it up, we do the following:
+      #    replace all \n with a newline
+      #    replace all \" with "
+      #    delete the first 3 lines (which are missing a trailing " )
+      #    delete everything after the string 'Participant'
+      #
+          # Replace escape sequences
+          content = content.replace('\\n', '\n').replace('\\"', '"')
+      
+          # Split the content into lines
+          lines = content.splitlines()
+      
+          # Remove the first 3 lines
+          lines = lines[3:]
+      
+          # Remove lines from 'Participant' to the end
+          cleaned_lines = []
+          participant_found = False
+          for line in lines:
+              if 'Participant' in line:
+                  participant_found = True
+              if not participant_found:
+                  cleaned_lines.append(line)
+      
+          # Join cleaned lines 
+          cleaned_content = '\n'.join(cleaned_lines)
+          num_streams, send_cpu, recv_cpu, end_data, mss, fq_rate = load_iperf_fields(cleaned_content, file_path)
+          # NOTE: this file is not used, but might be useful for debugging
+          new_filepath = file_path + ".fixed.json"
+          with open(new_filepath, 'w') as f:
+              f.write(cleaned_content)
+    else:
+          num_streams, send_cpu, recv_cpu, end_data, mss, fq_rate = load_iperf_fields(content, file_path)
 
-    # Split the content into lines
-    lines = content.splitlines()
+    return end_data, num_streams, send_cpu, recv_cpu, mss, fq_rate
 
-    # Remove the first 3 lines
-    lines = lines[3:]
-
-    # Remove lines from 'Participant' to the end
-    cleaned_lines = []
-    participant_found = False
-    for line in lines:
-        if 'Participant' in line:
-            participant_found = True
-        if not participant_found:
-            cleaned_lines.append(line)
-
-    # Join cleaned lines 
-    cleaned_content = '\n'.join(cleaned_lines)
-    # Extract the data from the JSON
+def load_iperf_fields(cleaned_content, file_path):
     try:
         data = json.loads(cleaned_content)
-        # get entire 'end' JSON object from iperf3 output
-        end_data = data.get('end')
-        num_streams = data["start"]["test_start"]["num_streams"]
-        send_cpu = float(end_data["cpu_utilization_percent"]["host_total"])
-        recv_cpu = float(end_data["cpu_utilization_percent"]["remote_total"])
-        #print(f"got iperf3 data: num_streams = {num_streams} ")
-    except:
-        print("Warning: Required JSON fields not found in file: ", file_path)
-        return None, None, None, None
+    except Exception as e:
+        print(f"Warning: JSON parse error in file {file_path}: {e}")
+        return None, None, None, None, None, None
 
-    # NOTE: this file is not used, but might be useful for debugging
-    new_filepath = file_path + ".fixed.json"
-    with open(new_filepath, 'w') as f:
-        f.write(cleaned_content)
+    # Helper for nested lookup with error reporting
+    def get_field(obj, key, path):
+        if key not in obj:
+            print(f"Warning: Missing field '{'.'.join(path + [key])}' in file: {file_path}")
+            return None
+        return obj[key]
 
-    return end_data, num_streams, send_cpu, recv_cpu
+    # Walk through required fields
+    start = get_field(data, "start", [])
+    test_start = get_field(start, "test_start", ["start"])
+    num_streams = get_field(test_start, "num_streams", ["start", "test_start"])
+    mss = get_field(start, "tcp_mss_default", ["start"])
+    fq_rate = get_field(start, "fq_rate", ["start"])
+    end_data = get_field(data, "end", [])
+    cpu = get_field(end_data, "cpu_utilization_percent", ["end"])
+    host_total = get_field(cpu, "host_total", ["end", "cpu_utilization_percent"])
+    remote_total = get_field(cpu, "remote_total", ["end", "cpu_utilization_percent"])
+
+    # Convert values
+    try:
+        send_cpu = float(host_total)
+        recv_cpu = float(remote_total)
+    except Exception as e:
+        print(f"Warning: Failed to convert CPU fields to float in file {file_path}: {e}")
+        return None, None, None, None, None, None
+
+    #print (f"load_iperf_fields: num_streams={num_streams}, send_cpu = {send_cpu}, recv_cpu = {recv_cpu}, end_data = {end_data}")
+    print (f"load_iperf_fields: mss={mss}, fq_rate = {fq_rate}")
+    return num_streams, send_cpu, recv_cpu, end_data, mss, fq_rate
+
 
 # alternate version of code that uses fix-pscheduler-json.sh below
 # leaving this code here for now, but should remove eventually. 
@@ -133,8 +163,9 @@ def find_files():
     mpstat_snd_pattern = re.compile(r"mpstat-sender:([\w\.\-]+):.*\.json")
     mpstat_rcv_pattern = re.compile(r"mpstat-receiver:([\w\.\-]+):.*\.json")
     # also, dont match on *fixed* either
-    src_cmd_pattern = re.compile(r"src-cmd:([\w\.\-]+):(?!.*fixed*)")
-
+    #src_cmd_pattern = re.compile(r"src-cmd:([\w\.\-]+):(?!.*fixed*)")
+    # only match .fixed
+    src_cmd_pattern = re.compile(r"src-cmd:([\w\.\-]+):.*\.fixed")
 
     results = []
 
@@ -166,7 +197,7 @@ def find_files():
     return results
 
 def extract_throughput(src_cmd_file):
-    data, num_streams, send_cpu, recv_cpu = load_iperf3_json(src_cmd_file)
+    data, num_streams, send_cpu, recv_cpu, mss, fq_rate = load_iperf3_json(src_cmd_file)
     if data:
         tput = float(data["sum_sent"]["bits_per_second"]) / 1000000000
         retrans = data["sum_sent"]["retransmits"]
