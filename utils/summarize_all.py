@@ -1,367 +1,450 @@
 #!/usr/bin/env python3
 
-# new version that uses output of pscheduler, and gets CPU from iperf3
-# If want detailed CPU from mpstat, use summarize_all_mpstat.py 
-#
-# note: there is some untested code in here to process mpstat files
-# XXX: To Do: merge this program with summarize_all_mpstat.py
-# XXX: .csv and .json output options not yet tested!
-
 import os
 import re
 import json
 import argparse
 import csv
-import sys
-from collections import defaultdict
 import statistics
-import subprocess
+from collections import defaultdict
 
-# Define global variables for default values
+# Globals
 verbose = 0
-max_tput_summary = 0
-# need to do extra JSON cleanup if from pscheduler. Set to 1 if needed.
-from_pscheduler=0
+from_pscheduler = 0  # kept for compatibility with older workflows
 
-def load_iperf3_json(file_path):
 
-    with open(file_path, 'r') as f:
-        content = f.read()
-
-    if from_pscheduler:
-      # NOTE: current JSON output by pscheduler is a mess, and not even valid JSON!
-      # to clean it up, we do the following:
-      #    replace all \n with a newline
-      #    replace all \" with "
-      #    delete the first 3 lines (which are missing a trailing " )
-      #    delete everything after the string 'Participant'
-      #
-          # Replace escape sequences
-          content = content.replace('\\n', '\n').replace('\\"', '"')
-      
-          # Split the content into lines
-          lines = content.splitlines()
-      
-          # Remove the first 3 lines
-          lines = lines[3:]
-      
-          # Remove lines from 'Participant' to the end
-          cleaned_lines = []
-          participant_found = False
-          for line in lines:
-              if 'Participant' in line:
-                  participant_found = True
-              if not participant_found:
-                  cleaned_lines.append(line)
-      
-          # Join cleaned lines 
-          cleaned_content = '\n'.join(cleaned_lines)
-          num_streams, send_cpu, recv_cpu, end_data, mss, fq_rate = load_iperf_fields(cleaned_content, file_path)
-          # NOTE: this file is not used, but might be useful for debugging
-          new_filepath = file_path + ".fixed.json"
-          with open(new_filepath, 'w') as f:
-              f.write(cleaned_content)
-    else:
-          num_streams, send_cpu, recv_cpu, end_data, mss, fq_rate = load_iperf_fields(content, file_path)
-
-    return end_data, num_streams, send_cpu, recv_cpu, mss, fq_rate
-
-def load_iperf_fields(cleaned_content, file_path):
+def get_nested(data, *keys, default=None):
+    """Safe nested getter."""
+    cur = data
     try:
-        data = json.loads(cleaned_content)
+        for k in keys:
+            cur = cur[k]
+        return cur
+    except Exception:
+        return default
+
+
+def load_iperf_fields(file_path):
+    """
+    Load iperf3 JSON and extract:
+      - num_streams
+      - send_cpu (host_total)
+      - recv_cpu (remote_total)
+      - mss (tcp_mss_default)
+      - fq_rate
+    Returns (data, num_streams, send_cpu, recv_cpu, mss, fq_rate)
+    """
+    try:
+        with open(file_path, "r") as f:
+            data = json.load(f)
     except Exception as e:
         print(f"Warning: JSON parse error in file {file_path}: {e}")
         return None, None, None, None, None, None
 
-    # Helper for nested lookup with error reporting
-    def get_field(obj, key, path):
-        if key not in obj:
-            print(f"Warning: Missing field '{'.'.join(path + [key])}' in file: {file_path}")
-            return None
-        return obj[key]
+    # num_streams
+    num_streams = get_nested(data, "start", "test_start", "num_streams")
 
-    # Walk through required fields
-    start = get_field(data, "start", [])
-    test_start = get_field(start, "test_start", ["start"])
-    num_streams = get_field(test_start, "num_streams", ["start", "test_start"])
-    mss = get_field(start, "tcp_mss_default", ["start"])
-    fq_rate = get_field(start, "fq_rate", ["start"])
-    end_data = get_field(data, "end", [])
-    cpu = get_field(end_data, "cpu_utilization_percent", ["end"])
-    host_total = get_field(cpu, "host_total", ["end", "cpu_utilization_percent"])
-    remote_total = get_field(cpu, "remote_total", ["end", "cpu_utilization_percent"])
+    # MSS and fq_rate (may be None)
+    mss = get_nested(data, "start", "tcp_mss_default")
+    fq_rate = get_nested(data, "start", "fq_rate")
 
-    # Convert values
+    # CPU
+    send_cpu = get_nested(data, "end", "cpu_utilization_percent", "host_total")
+    recv_cpu = get_nested(data, "end", "cpu_utilization_percent", "remote_total")
+
+    if verbose:
+        print(
+            f"load_iperf_fields({file_path}): num_streams={num_streams}, "
+            f"mss={mss}, fq_rate={fq_rate}, send_cpu={send_cpu}, recv_cpu={recv_cpu}"
+        )
+
+    return data, num_streams, send_cpu, recv_cpu, mss, fq_rate
+
+
+def extract_throughput(src_cmd_file):
+    """
+    Extract throughput, retrans, num_streams, send/recv CPU, MSS, FQ rate
+    from an iperf3 JSON file, with robust handling of different layouts.
+    """
+    data, num_streams, send_cpu, recv_cpu, mss, fq_rate = load_iperf_fields(src_cmd_file)
+
+    if data is not None:
+        # Try several common iperf3 layouts for the summary section
+        sum_section = (
+            get_nested(data, "end", "sum_sent")
+            or get_nested(data, "end", "sum")
+            or data.get("sum_sent")
+            or data.get("sum")
+        )
+
+        if sum_section is None:
+            if verbose:
+                print(f"Warning: no sum/sum_sent section in {src_cmd_file}")
+            # pass back everything except throughput/retrans
+            return None, None, num_streams, send_cpu, recv_cpu, mss, fq_rate
+
+        bits_per_second = sum_section.get("bits_per_second")
+        if bits_per_second is None:
+            if verbose:
+                print(f"Warning: no bits_per_second in summary for {src_cmd_file}")
+            return None, None, num_streams, send_cpu, recv_cpu, mss, fq_rate
+
+        tput = float(bits_per_second) / 1e9  # Gbit/s
+        retrans = sum_section.get("retransmits", 0)
+
+        if verbose:
+            print(
+                f"extract_throughput({src_cmd_file}): tput={tput} Gbps, "
+                f"retrans={retrans}, num_streams={num_streams}"
+            )
+
+        return tput, retrans, num_streams, send_cpu, recv_cpu, mss, fq_rate
+
+    # Fallback: parse old-style text output if JSON wasn't usable
     try:
-        send_cpu = float(host_total)
-        recv_cpu = float(remote_total)
+        with open(src_cmd_file, "r") as f:
+            for line in f:
+                if "sender" in line and "CPU" not in line:
+                    m = re.search(r"(\d+\.\d+)\s*Gbits/sec\s*(\d+)", line)
+                    if m:
+                        tput = float(m.group(1))
+                        retrans = int(m.group(2))
+                        return tput, retrans, num_streams, send_cpu, recv_cpu, mss, fq_rate
     except Exception as e:
-        print(f"Warning: Failed to convert CPU fields to float in file {file_path}: {e}")
-        return None, None, None, None, None, None
+        if verbose:
+            print(f"Warning: fallback parse failed for {src_cmd_file}: {e}")
 
-    #print (f"load_iperf_fields: num_streams={num_streams}, send_cpu = {send_cpu}, recv_cpu = {recv_cpu}, end_data = {end_data}")
-    print (f"load_iperf_fields: mss={mss}, fq_rate = {fq_rate}")
-    return num_streams, send_cpu, recv_cpu, end_data, mss, fq_rate
+    return None, None, num_streams, send_cpu, recv_cpu, mss, fq_rate
 
 
-# alternate version of code that uses fix-pscheduler-json.sh below
-# leaving this code here for now, but should remove eventually. 
-    filename = os.path.basename(file_path)
-    try:
-        if not os.path.exists(new_filepath):
-            result = subprocess.run(['fix-pscheduler-json.sh', file_path], capture_output=True, text=True, check=True)
-
-        result = subprocess.run(['jq', '.end', new_filepath], capture_output=True, text=True, check=True)
-        try:
-            data = json.loads(result.stdout)
-        except:
-            print(f"Error parsing data in file: {file_path}")
-            return None, None, None, None
-
-        result = subprocess.run(['jq', '.start.test_start.num_streams', new_filepath], capture_output=True, text=True, check=True)
-        num_streams = int(result.stdout.split('\n')[0])
-
-        send_cpu = float(data["cpu_utilization_percent"]["host_total"])
-        recv_cpu = float(data["cpu_utilization_percent"]["remote_total"])
-        return data, num_streams, send_cpu, recv_cpu
-    except subprocess.CalledProcessError as e:
-        return None, None, None, None
-
-def calculate_cpu_averages(cpu_loads):
-    if not cpu_loads:
-        return None
-
-    sums = {
-        "usr": 0, "sys": 0, "nice": 0, "iowait": 0, "irq": 0,
-        "soft": 0, "steal": 0, "guest": 0, "gnice": 0, "idle": 0
-    }
-    count = 0
-
-    for load in cpu_loads:
-        for key in sums:
-            sums[key] += load[key]
-        count += 1
-
-    averages = {key: round(value / count, 1) for key, value in sums.items() if value != 0}
-    return averages
-
-def process_cpu_data(data):
-    cpu_loads = defaultdict(list)
-    for host in data['sysstat']['hosts']:
-        for stat in host['statistics']:
-            for load in stat['cpu-load']:
-                cpu_loads[load['cpu']].append(load)
-    
-    for cpu, loads in cpu_loads.items():
-        cpu_loads[cpu] = loads[4:-1]
-
-    averages = {cpu: calculate_cpu_averages(loads) for cpu, loads in cpu_loads.items() if loads}
-    return averages, cpu_loads
-
-def find_files():
-    cwd = os.getcwd()
-    mpstat_snd_pattern = re.compile(r"mpstat-sender:([\w\.\-]+):.*\.json")
-    mpstat_rcv_pattern = re.compile(r"mpstat-receiver:([\w\.\-]+):.*\.json")
-    # also, dont match on *fixed* either
-    #src_cmd_pattern = re.compile(r"src-cmd:([\w\.\-]+):(?!.*fixed*)")
-    # only match .fixed
-    src_cmd_pattern = re.compile(r"src-cmd:([\w\.\-]+):.*\.fixed")
-
+def find_files(input_dir="."):
+    """
+    Walk directory tree and find iperf3 src-cmd:* files.
+    """
     results = []
+    # match files ending in .N
+    iperf_pattern = re.compile(r"src-cmd:(?P<host>[^:]+):\d+$")
+    # match files ending in .json
+    #iperf_pattern = re.compile(r"src-cmd:(?P<host>[^:]+):\d+(?:\.json)?$")
 
-    for root, dirs, files in os.walk(cwd):
+    for root, dirs, files in os.walk(input_dir):
         file_cnt = 0
         for file in files:
-            mpstat_snd_match = mpstat_snd_pattern.match(file)
-            mpstat_rcv_match = mpstat_rcv_pattern.match(file)
-            src_cmd_match = src_cmd_pattern.match(file)
-            test_name = os.path.basename(root)
-            if mpstat_snd_match:
-                file_cnt += 1
-                ip_address = mpstat_snd_match.group(1)
-                results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "mpstat_snd"})
-            if mpstat_rcv_match:
-                file_cnt += 1
-                ip_address = mpstat_rcv_match.group(1)
-                results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "mpstat_rcv"})
-            if src_cmd_match:
-                file_cnt += 1
-                ip_address = src_cmd_match.group(1)
-                results.append({"file": os.path.join(root, file), "ip_address": ip_address, "test_name": test_name, "type": "src_cmd"})
+            full_path = os.path.join(root, file)
 
-        if file_cnt == 0:
-            if verbose:
-                print(f"No iperf3 or mpstat files found in directory: {root}. Skipping...")
-            continue
+            m = iper_pattern = iperf_pattern.search(file)
+            if m:
+                ip = m.group("host")
+                test_name = os.path.basename(root)
+                results.append(
+                    {
+                        "file": full_path,
+                        "test_name": test_name,
+                        "ip_address": ip,
+                        "type": "src_cmd",
+                    }
+                )
+                file_cnt += 1
+
+        if file_cnt == 0 and verbose:
+            print(f"No iperf3 files found in directory: {root}. Skipping...")
 
     return results
 
-def extract_throughput(src_cmd_file):
-    data, num_streams, send_cpu, recv_cpu, mss, fq_rate = load_iperf3_json(src_cmd_file)
-    if data:
-        tput = float(data["sum_sent"]["bits_per_second"]) / 1000000000
-        retrans = data["sum_sent"]["retransmits"]
-        if verbose:
-            print(f"loaded JSON results: tput={tput} Gbps, retrans={retrans}, send CPU={send_cpu}, recv CPU={recv_cpu}")
-        return tput, retrans, num_streams, send_cpu, recv_cpu
-    else:
-        with open(src_cmd_file, 'r') as f:
-            for line in f:
-                if 'sender' in line and 'CPU' not in line:
-                    throughput = re.search(r'(\d+\.\d+)\s*Gbits/sec\s*(\d+)', line)
-                    if throughput:
-                        tput = float(throughput.group(1))
-                        retrans = int(throughput.group(2))
-                        return tput, retrans, 1, None, None
-    return None, None, None, None, None
 
-def write_human_readable(throughput_values, retrans_values, snd_cpu_values, rcv_cpu_values):
+def write_human_readable(
+    throughput_values,
+    retrans_values,
+    snd_cpu_values,
+    rcv_cpu_values,
+    mss_values,
+    fq_rate_values,
+):
+    """
+    Human-readable summary with MSS and FQ_Rate on the Host: line.
+    """
     print("\nResult Summary, sorted by Average Throughput:")
 
-    #print ("debug: retrans_values dict: ", retrans_values)
-    #print ("debug: cpu_values dict: ", snd_cpu_values)
+    # Aggregate per host and per test_name
+    per_host_tests = defaultdict(list)  # ip -> list of test dicts
+    host_summary = {}  # ip -> aggregate info for Host: line
 
-    # Sort results by average throughput within each IP address
-    sorted_results = {}
     for (test_name, ip_address), tputs in throughput_values.items():
-        avg_tput = round(statistics.mean(tputs), 1)
-        min_tput = round(min(tputs), 1)
-        max_tput = round(max(tputs), 1)
-        stdev_tput = round(statistics.stdev(tputs), 1) if len(tputs) > 1 else 0.0
-        avg_retrans = int(statistics.mean(retrans_values[(test_name, ip_address)])) if (test_name, ip_address) in retrans_values else 0
-        avg_snd_cpu = int(statistics.mean(snd_cpu_values[(test_name, ip_address)])) if (test_name, ip_address) in snd_cpu_values else 0
-        avg_rcv_cpu = int(statistics.mean(rcv_cpu_values[(test_name, ip_address)])) if (test_name, ip_address) in snd_cpu_values else 0
-        # only include count if value > 0
-        ntests = sum(1 for x in tputs if x > 0)
-        
-        # Store the data in a nested dictionary sorted by IP
-        if ip_address not in sorted_results:
-            sorted_results[ip_address] = []
-        
-        sorted_results[ip_address].append({
-            "test_name": test_name,
-            "avg_tput": avg_tput,
-            "stdev_tput": stdev_tput,
-            "min_tput": min_tput,
-            "max_tput": max_tput,
-            "avg_retrans": avg_retrans,
-            "avg_snd_cpu": avg_snd_cpu,
-            "avg_rcv_cpu": avg_rcv_cpu
-        })
+        if not tputs:
+            continue
 
-    # Sort each IP's test entries by average throughput in descending order
-    for ip_address in sorted_results:
-        sorted_results[ip_address].sort(key=lambda x: x["avg_tput"], reverse=True)
+        clean_tputs = [t for t in tputs if isinstance(t, (int, float)) and t > 0]
+        if not clean_tputs:
+            continue
 
-    # Print the sorted results
-    for ip_address, tests in sorted_results.items():
-        print(f"Host: {ip_address}  (average result for {ntests} tests)")
-        for test in tests:
-            print(f"    Test Name: {test['test_name']}, Ave Throughput: {test['avg_tput']} Gbps (std: {test['stdev_tput']}, min: {test['min_tput']}, max: {test['max_tput']}),  Retr: {test['avg_retrans']}, snd cpu: {test['avg_snd_cpu']}%, rcv cpu: {test['avg_rcv_cpu']}%")
+        nruns = len(clean_tputs)  # number of files/runs for this test_name+host
+        avg_tput = round(statistics.mean(clean_tputs), 1)
+        min_tput = round(min(clean_tputs), 1)
+        max_tput = round(max(clean_tputs), 1)
+        stdev_tput = round(statistics.stdev(clean_tputs), 1) if nruns > 1 else 0.0
+
+        rlist = retrans_values.get((test_name, ip_address), [])
+        rlist = [r for r in rlist if isinstance(r, (int, float))]
+        avg_retrans = int(statistics.mean(rlist)) if rlist else 0
+
+        snd_list = snd_cpu_values.get((test_name, ip_address), [])
+        snd_list = [x for x in snd_list if isinstance(x, (int, float))]
+        avg_snd_cpu = int(statistics.mean(snd_list)) if snd_list else 0
+
+        rcv_list = rcv_cpu_values.get((test_name, ip_address), [])
+        rcv_list = [x for x in rcv_list if isinstance(x, (int, float))]
+        avg_rcv_cpu = int(statistics.mean(rcv_list)) if rcv_list else 0
+
+        mss_list = mss_values.get((test_name, ip_address), [])
+        mss_list = [m for m in mss_list if isinstance(m, (int, float))]
+        avg_mss = int(statistics.mean(mss_list)) if mss_list else None
+
+        fq_list = fq_rate_values.get((test_name, ip_address), [])
+        fq_list = [f for f in fq_list if isinstance(f, (int, float))]
+        avg_fq = int(statistics.mean(fq_list)) if fq_list else None
+
+        per_host_tests[ip_address].append(
+            {
+                "test_name": test_name,
+                "avg_tput": avg_tput,
+                "min_tput": min_tput,
+                "max_tput": max_tput,
+                "stdev_tput": stdev_tput,
+                "avg_retrans": avg_retrans,
+                "avg_snd_cpu": avg_snd_cpu,
+                "avg_rcv_cpu": avg_rcv_cpu,
+            }
+        )
+
+        # host-level summary (we'll fill ntests later as number of test types)
+        hs = host_summary.setdefault(
+            ip_address,
+            {
+                "ntests": 0,        # will be overwritten
+                "mss": None,
+                "fq_rate": None,
+                "max_avg_tput": 0.0,
+            },
+        )
+        if avg_tput > hs["max_avg_tput"]:
+            hs["max_avg_tput"] = avg_tput
+        if hs["mss"] is None and avg_mss is not None:
+            hs["mss"] = avg_mss
+        if hs["fq_rate"] is None and avg_fq is not None:
+            hs["fq_rate"] = avg_fq
+
+    # For each host, sort tests by avg_tput desc
+    for ip in per_host_tests:
+        per_host_tests[ip].sort(key=lambda t: t["avg_tput"], reverse=True)
+
+    # Now set ntests = number of test types (test_name groups) per host
+    for ip, tests in per_host_tests.items():
+        host_summary[ip]["ntests"] = len(tests)
+
+    # Sort hosts by their best test
+    def host_key(ip):
+        info = host_summary.get(ip, {})
+        return info.get("max_avg_tput", 0.0)
+
+    for ip in sorted(per_host_tests.keys(), key=host_key, reverse=True):
+        hs = host_summary.get(ip, {})
+        mss_display = hs.get("mss")
+        fq_display = hs.get("fq_rate")
+        mss_display = mss_display if mss_display is not None else "?"
+        fq_display = fq_display if fq_display is not None else "?"
+
+        ntests = hs.get("ntests", 0)  # now "5" for 5 test types
+
+        print(
+            f"Host: {ip}  (MSS = {mss_display}, FQ_Rate = {fq_display}) "
+            f"(average result for {ntests} tests)"
+        )
+        for test in per_host_tests[ip]:
+            print(
+                f"    Test Name: {test['test_name']}, "
+                f"Ave Throughput: {test['avg_tput']} Gbps, "
+                f"Min: {test['min_tput']} Gbps, "
+                f"Max: {test['max_tput']} Gbps, "
+                f"StdDev: {test['stdev_tput']} Gbps, "
+                f"retrans: {test['avg_retrans']}, "
+                f"snd cpu: {test['avg_snd_cpu']}%, "
+                f"rcv cpu: {test['avg_rcv_cpu']}%"
+            )
 
 
-def write_to_csv(output_file, throughput_values, cpu_averages):
-    with open(output_file, 'w', newline='') as csvfile:
-        fieldnames = ['Test Name', 'IP', 'Avg Throughput (Gbps)', 'Min Throughput (Gbps)', 'Max Throughput (Gbps)', 'CPU Type', 'CPU Data']
+def write_to_csv(output_file, throughput_values, snd_cpu_values, rcv_cpu_values):
+    fieldnames = [
+        "test_name",
+        "ip_address",
+        "avg_tput",
+        "min_tput",
+        "max_tput",
+        "stdev_tput",
+        "avg_snd_cpu",
+        "avg_rcv_cpu",
+    ]
+    with open(output_file, "w", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        
-        for (test_name, ip_address), tputs in throughput_values.items():
-            avg_tput = statistics.mean(tputs)
-            min_tput = min(tputs)
-            max_tput = max(tputs)
-            for cpu_type in ['sender', 'receiver']:
-                if (test_name, ip_address, cpu_type) in cpu_averages:
-                    row = {
-                        'Test Name': test_name,
-                        'IP': ip_address,
-                        'Avg Throughput (Gbps)': avg_tput,
-                        'Min Throughput (Gbps)': min_tput,
-                        'Max Throughput (Gbps)': max_tput,
-                        'CPU Type': cpu_type,
-                        'CPU Data': cpu_averages[(test_name, ip_address, cpu_type)]
-                    }
-                    writer.writerow(row)
-    print(f"CSV output saved to {output_file}")
 
-def write_to_json(output_file, throughput_values, cpu_averages):
-    output = {}
+        for (test_name, ip_address), tputs in throughput_values.items():
+            if not tputs:
+                continue
+            clean_tputs = [t for t in tputs if isinstance(t, (int, float)) and t > 0]
+            if not clean_tputs:
+                continue
+
+            ntests = len(clean_tputs)
+            avg_tput = round(statistics.mean(clean_tputs), 1)
+            min_tput = round(min(clean_tputs), 1)
+            max_tput = round(max(clean_tputs), 1)
+            stdev_tput = round(statistics.stdev(clean_tputs), 1) if ntests > 1 else 0.0
+
+            snd_list = snd_cpu_values.get((test_name, ip_address), [])
+            snd_list = [x for x in snd_list if isinstance(x, (int, float))]
+            avg_snd_cpu = int(statistics.mean(snd_list)) if snd_list else 0
+
+            rcv_list = rcv_cpu_values.get((test_name, ip_address), [])
+            rcv_list = [x for x in rcv_list if isinstance(x, (int, float))]
+            avg_rcv_cpu = int(statistics.mean(rcv_list)) if rcv_list else 0
+
+            writer.writerow(
+                {
+                    "test_name": test_name,
+                    "ip_address": ip_address,
+                    "avg_tput": avg_tput,
+                    "min_tput": min_tput,
+                    "max_tput": max_tput,
+                    "stdev_tput": stdev_tput,
+                    "avg_snd_cpu": avg_snd_cpu,
+                    "avg_rcv_cpu": avg_rcv_cpu,
+                }
+            )
+
+
+def write_to_json(output_file, throughput_values, snd_cpu_values, rcv_cpu_values):
+    results = []
     for (test_name, ip_address), tputs in throughput_values.items():
-        avg_tput = statistics.mean(tputs)
-        min_tput = min(tputs)
-        max_tput = max(tputs)
-        output[f"{test_name}_{ip_address}"] = {
-            "average_throughput": avg_tput,
-            "min_throughput": min_tput,
-            "max_throughput": max_tput,
-            "cpu_averages": {
-                "sender": cpu_averages.get((test_name, ip_address, 'sender'), {}),
-                "receiver": cpu_averages.get((test_name, ip_address, 'receiver'), {})
+        if not tputs:
+            continue
+        clean_tputs = [t for t in tputs if isinstance(t, (int, float)) and t > 0]
+        if not clean_tputs:
+            continue
+
+        ntests = len(clean_tputs)
+        avg_tput = round(statistics.mean(clean_tputs), 1)
+        min_tput = round(min(clean_tputs), 1)
+        max_tput = round(max(clean_tputs), 1)
+        stdev_tput = round(statistics.stdev(clean_tputs), 1) if ntests > 1 else 0.0
+
+        snd_list = snd_cpu_values.get((test_name, ip_address), [])
+        snd_list = [x for x in snd_list if isinstance(x, (int, float))]
+        avg_snd_cpu = int(statistics.mean(snd_list)) if snd_list else 0
+
+        rcv_list = rcv_cpu_values.get((test_name, ip_address), [])
+        rcv_list = [x for x in rcv_list if isinstance(x, (int, float))]
+        avg_rcv_cpu = int(statistics.mean(rcv_list)) if rcv_list else 0
+
+        results.append(
+            {
+                "test_name": test_name,
+                "ip_address": ip_address,
+                "avg_tput": avg_tput,
+                "min_tput": min_tput,
+                "max_tput": max_tput,
+                "stdev_tput": stdev_tput,
+                "avg_snd_cpu": avg_snd_cpu,
+                "avg_rcv_cpu": avg_rcv_cpu,
             }
-        }
-    with open(output_file, 'w') as f:
-        json.dump(output, f, indent=4)
-    print(f"JSON output saved to {output_file}")
+        )
+
+    with open(output_file, "w") as f:
+        json.dump(results, f, indent=2)
+
 
 def main(args):
-    use_mpstat = args.use_mpstat
+    global verbose
+    input_dir = args.input_dir
+
     throughput_values = defaultdict(list)
     retrans_values = defaultdict(list)
     snd_cpu_loads = defaultdict(list)
     rcv_cpu_loads = defaultdict(list)
-    cpu_averages = {}
+    mss_values = defaultdict(list)
+    fq_rate_values = defaultdict(list)
 
-    results = find_files()
+    results = find_files(input_dir)
     for result in results:
-        input_file = result['file']
-        test_name = result['test_name']
-        ip_address = result['ip_address']
-        type = result['type']
-        
-        if type == 'src_cmd':
-            throughput, retrans, num_streams, send_cpu, recv_cpu = extract_throughput(input_file)
-            if throughput is not None:
-                throughput_values[(test_name, ip_address)].append(throughput)
-                retrans_values[(test_name, ip_address)].append(retrans)
+        input_file = result["file"]
+        test_name = result["test_name"]
+        ip_address = result["ip_address"]
+
+        # New line per your request:
+        print(f"Processing file: {input_file}")
+
+        tput, retrans, num_streams, send_cpu, recv_cpu, mss, fq_rate = extract_throughput(
+            input_file
+        )
+
+        if tput is not None:
+            throughput_values[(test_name, ip_address)].append(tput)
+            retrans_values[(test_name, ip_address)].append(retrans)
+            if send_cpu is not None:
                 snd_cpu_loads[(test_name, ip_address)].append(send_cpu)
+            if recv_cpu is not None:
                 rcv_cpu_loads[(test_name, ip_address)].append(recv_cpu)
-            else:
-                if verbose:
-                    print(f"Throughput not found in file {input_file}")
+            if mss is not None:
+                mss_values[(test_name, ip_address)].append(mss)
+            if fq_rate is not None:
+                fq_rate_values[(test_name, ip_address)].append(fq_rate)
+        else:
+            if verbose:
+                print(f"Throughput not found in file {input_file}")
 
-        if use_mpstat and (type == 'mpstat_snd' or type == 'mpstat_rcv'):
-            with open(input_file, 'r') as f:
-                try:
-                    data = json.load(f)
-                    averages, cpu_loads = process_cpu_data(data)
-                    for cpu, loads in cpu_loads.items():
-                        if type == 'mpstat_snd':
-                            snd_cpu_loads[(test_name, ip_address)][cpu].extend(loads)
-                        else:
-                            rcv_cpu_loads[(test_name, ip_address)][cpu].extend(loads)
-                except:
-                    print(f"Error loading mpstat file: {input_file}")
-                    continue
-
-    if args.format == 'human':
-        write_human_readable(throughput_values, retrans_values, snd_cpu_loads, rcv_cpu_loads)
-    elif args.format == 'csv':
+    if args.format == "human":
+        write_human_readable(
+            throughput_values,
+            retrans_values,
+            snd_cpu_loads,
+            rcv_cpu_loads,
+            mss_values,
+            fq_rate_values,
+        )
+    elif args.format == "csv":
         output_file = args.output_file or "summary.csv"
-        write_to_csv(output_file, throughput_values, cpu_averages)
-    elif args.format == 'json':
+        write_to_csv(output_file, throughput_values, snd_cpu_loads, rcv_cpu_loads)
+    elif args.format == "json":
         output_file = args.output_file or "summary.json"
-        write_to_json(output_file, throughput_values, cpu_averages)
+        write_to_json(output_file, throughput_values, snd_cpu_loads, rcv_cpu_loads)
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Process JSON files to calculate average CPU metrics.')
-    parser.add_argument('-i', '--input_dir', default='.', help='Input directory containing JSON files (default: current directory)')
-    parser.add_argument('-f', '--format', choices=['human', 'json', 'csv'], default='human', help='Output format (default: human-readable)')
-    parser.add_argument('-o', '--output_file', help='Output filename (default = mpstat-summary.{csv,json,txt)')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Increase output verbosity')
-    parser.add_argument('--use_mpstat', action='store_true', help='Use CPU data from mpstat files (not done)')
-    
+    parser = argparse.ArgumentParser(
+        description="Summarize iperf3 JSON results."
+    )
+    parser.add_argument(
+        "-i",
+        "--input_dir",
+        default=".",
+        help="Input directory containing iperf3 JSON files (default: current directory)",
+    )
+    parser.add_argument(
+        "-f",
+        "--format",
+        choices=["human", "json", "csv"],
+        default="human",
+        help="Output format (default: human-readable)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output_file",
+        help="Output filename when using csv/json format",
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Increase output verbosity"
+    )
+
     args = parser.parse_args()
     verbose = args.verbose
     main(args)
-
 
