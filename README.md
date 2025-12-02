@@ -3,7 +3,8 @@
 To install dependencies, run:
 
 ```
-python3 setup.py install
+pip install build
+python3 -m build
 ```
 
 
